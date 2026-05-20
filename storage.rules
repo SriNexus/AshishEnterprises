@@ -1,0 +1,79 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Allow public read access to all images
+    match /{allPaths=**} {
+      allow read: if true;
+    }
+    
+    // Products images - admin only upload
+    match /products/{imageId} {
+      allow write: if isAuthenticated();
+    }
+    
+    // Gallery images - admin only upload
+    match /gallery/{imageId} {
+      allow write: if isAuthenticated();
+    }
+    
+    // Blog images - admin only upload
+    match /blog/{imageId} {
+      allow write: if isAuthenticated();
+    }
+    
+    // Settings/SEO images - admin only upload
+    match /settings/{imageId} {
+      allow write: if isAuthenticated();
+    }
+    
+    match /seo/{imageId} {
+      allow write: if isAuthenticated();
+    }
+    
+    // Projects images - admin only upload
+    match /projects/{imageId} {
+      allow write: if isAuthenticated();
+    }
+    
+    // Hero images
+    match /hero/{imageId} {
+      allow write: if isAuthenticated();
+    }
+
+    // Team images
+    match /team/{imageId} {
+      allow write: if isAuthenticated();
+    }
+
+    // Testimonial images
+    match /testimonials/{imageId} {
+      allow write: if isAuthenticated();
+    }
+
+    // Service images
+    match /services/{imageId} {
+      allow write: if isAuthenticated();
+    }
+
+    // FAQ images
+    match /faq/{imageId} {
+      allow write: if isAuthenticated();
+    }
+
+    // Branding assets (logo, favicon)
+    match /branding/{imageId} {
+      allow write: if isAuthenticated();
+    }
+
+    // Generic uploads folder - authenticated users only
+    match /uploads/{imageId} {
+      allow write: if isAuthenticated();
+    }
+  }
+}
