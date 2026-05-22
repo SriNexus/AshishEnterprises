@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
-import {
-  collection, query, where, onSnapshot, doc,
-} from 'firebase/firestore';
+import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 import { COLLECTIONS } from '@/firebase/collections';
 import {
@@ -13,7 +11,7 @@ import {
   SITE_CONFIG as STATIC_CONFIG,
 } from '@/data/constants';
 import type { TestimonialData, FAQData, ServiceData, ProjectData, StatData } from '@/types';
-import type { SettingsDoc } from '@/types/admin';
+import type { SettingsDoc, ProductDoc, GalleryDoc, BlogPostDoc } from '@/types/admin';
 
 interface SiteConfig {
   name: string;
@@ -23,148 +21,114 @@ interface SiteConfig {
   whatsapp: string;
   email: string;
   address: string;
-  socialLinks: {
-    facebook: string;
-    instagram: string;
-    linkedin: string;
-    twitter: string;
-    youtube: string;
-  };
+  socialLinks: { facebook: string; instagram: string; linkedin: string; twitter: string; youtube: string };
 }
 
-interface SiteContent {
+export interface SiteContent {
   testimonials: TestimonialData[];
   faqs: FAQData[];
   services: ServiceData[];
   projects: ProjectData[];
+  products: ProductDoc[];
+  gallery: GalleryDoc[];
+  blogPosts: BlogPostDoc[];
   stats: StatData[];
   settings: SettingsDoc | null;
   config: SiteConfig;
   loading: boolean;
+  /** True if Firestore products collection has data (so we use it instead of static) */
+  hasFirestoreProducts: boolean;
+  hasFirestoreGallery: boolean;
+  hasFirestoreBlog: boolean;
 }
 
-/**
- * Realtime hook — subscribes to Firestore with onSnapshot.
- * When admin updates content, the frontend reflects changes instantly.
- * Falls back to static constants if Firestore collections are empty.
- */
+/* All subscriptions use inline onSnapshot with error handling */
+
 export function useSiteContent(): SiteContent {
   const [content, setContent] = useState<SiteContent>({
     testimonials: STATIC_TESTIMONIALS,
     faqs: STATIC_FAQS,
     services: STATIC_SERVICES,
     projects: STATIC_PROJECTS,
+    products: [],
+    gallery: [],
+    blogPosts: [],
     stats: STATS,
     settings: null,
-    config: STATIC_CONFIG,
+    config: STATIC_CONFIG as unknown as SiteConfig,
     loading: true,
+    hasFirestoreProducts: false,
+    hasFirestoreGallery: false,
+    hasFirestoreBlog: false,
   });
 
   useEffect(() => {
-    const unsubscribers: (() => void)[] = [];
+    const unsubs: (() => void)[] = [];
+    let loaded = false;
 
-    // ── Settings (single doc, realtime) ──
-    const settingsUnsub = onSnapshot(
-      doc(db, COLLECTIONS.SETTINGS, 'main'),
-      (snap) => {
+    const markLoaded = () => {
+      if (!loaded) { loaded = true; setContent(prev => ({ ...prev, loading: false })); }
+    };
+
+    // ── Settings ──
+    try {
+      const unsub = onSnapshot(doc(db, COLLECTIONS.SETTINGS, 'main'), (snap) => {
         if (snap.exists()) {
-          const data = snap.data() as SettingsDoc;
+          const d = snap.data() as SettingsDoc;
           setContent(prev => ({
             ...prev,
-            settings: data,
+            settings: d,
             config: {
-              ...STATIC_CONFIG,
-              name: data.siteName || STATIC_CONFIG.name,
-              tagline: data.tagline || STATIC_CONFIG.tagline,
-              phone: data.phone || STATIC_CONFIG.phone,
-              email: data.email || STATIC_CONFIG.email,
-              whatsapp: data.whatsapp || STATIC_CONFIG.whatsapp,
-              address: data.address || STATIC_CONFIG.address,
-              socialLinks: { ...STATIC_CONFIG.socialLinks, ...data.socialLinks },
+              name: d.siteName || STATIC_CONFIG.name,
+              tagline: d.tagline || STATIC_CONFIG.tagline,
+              description: STATIC_CONFIG.description,
+              phone: d.phone || STATIC_CONFIG.phone,
+              email: d.email || STATIC_CONFIG.email,
+              whatsapp: d.whatsapp || STATIC_CONFIG.whatsapp,
+              address: d.address || STATIC_CONFIG.address,
+              socialLinks: { ...STATIC_CONFIG.socialLinks, ...d.socialLinks },
             },
           }));
-
-          // Dynamic favicon
-          if (data.faviconUrl) {
+          if (d.faviconUrl) {
             let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
-            if (!link) {
-              link = document.createElement('link');
-              link.rel = 'icon';
-              document.head.appendChild(link);
-            }
-            link.href = data.faviconUrl;
+            if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+            link.href = d.faviconUrl;
           }
         }
-        setContent(prev => ({ ...prev, loading: false }));
-      },
-      (error) => {
-        console.warn('Settings listener error:', error);
-        setContent(prev => ({ ...prev, loading: false }));
-      }
-    );
-    unsubscribers.push(settingsUnsub);
+        markLoaded();
+      }, () => markLoaded());
+      unsubs.push(unsub);
+    } catch { markLoaded(); }
 
-    // ── Testimonials (realtime) ──
-    const testimonialsUnsub = onSnapshot(
-      query(collection(db, COLLECTIONS.TESTIMONIALS), where('isPublished', '==', true)),
-      (snap) => {
-        if (snap.docs.length > 0) {
-          setContent(prev => ({
-            ...prev,
-            testimonials: snap.docs.map(d => ({ id: d.id, ...d.data() } as unknown as TestimonialData)),
-          }));
-        }
-      },
-      () => {} // Silent fail — keep static data
-    );
-    unsubscribers.push(testimonialsUnsub);
+    // ── Helper for published collections ──
+    function sub<T>(colName: string, key: string, hasKey?: string) {
+      try {
+        const unsub = onSnapshot(collection(db, colName), (snap) => {
+          const docs = snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter((d: Record<string, unknown>) => d.isPublished !== false) as T[];
+          if (docs.length > 0) {
+            setContent(prev => ({
+              ...prev,
+              [key]: docs,
+              ...(hasKey ? { [hasKey]: true } : {}),
+            }));
+          }
+        }, () => {});
+        unsubs.push(unsub);
+      } catch { /* keep static */ }
+    }
 
-    // ── FAQs (realtime) ──
-    const faqsUnsub = onSnapshot(
-      query(collection(db, COLLECTIONS.FAQ), where('isPublished', '==', true)),
-      (snap) => {
-        if (snap.docs.length > 0) {
-          setContent(prev => ({
-            ...prev,
-            faqs: snap.docs.map(d => ({ id: d.id, ...d.data() } as unknown as FAQData)),
-          }));
-        }
-      },
-      () => {}
-    );
-    unsubscribers.push(faqsUnsub);
+    sub<TestimonialData>(COLLECTIONS.TESTIMONIALS, 'testimonials');
+    sub<FAQData>(COLLECTIONS.FAQ, 'faqs');
+    sub<ServiceData>(COLLECTIONS.SERVICES, 'services');
+    sub<ProjectData>(COLLECTIONS.PROJECTS, 'projects');
+    sub<ProductDoc>(COLLECTIONS.PRODUCTS, 'products', 'hasFirestoreProducts');
+    sub<GalleryDoc>(COLLECTIONS.GALLERY, 'gallery', 'hasFirestoreGallery');
+    sub<BlogPostDoc>(COLLECTIONS.BLOG_POSTS, 'blogPosts', 'hasFirestoreBlog');
 
-    // ── Services (realtime) ──
-    const servicesUnsub = onSnapshot(
-      query(collection(db, COLLECTIONS.SERVICES), where('isPublished', '==', true)),
-      (snap) => {
-        if (snap.docs.length > 0) {
-          setContent(prev => ({
-            ...prev,
-            services: snap.docs.map(d => ({ id: d.id, ...d.data() } as unknown as ServiceData)),
-          }));
-        }
-      },
-      () => {}
-    );
-    unsubscribers.push(servicesUnsub);
-
-    // ── Projects (realtime) ──
-    const projectsUnsub = onSnapshot(
-      query(collection(db, COLLECTIONS.PROJECTS), where('isPublished', '==', true)),
-      (snap) => {
-        if (snap.docs.length > 0) {
-          setContent(prev => ({
-            ...prev,
-            projects: snap.docs.map(d => ({ id: d.id, ...d.data() } as unknown as ProjectData)),
-          }));
-        }
-      },
-      () => {}
-    );
-    unsubscribers.push(projectsUnsub);
-
-    return () => unsubscribers.forEach(unsub => unsub());
+    const timeout = setTimeout(markLoaded, 3000);
+    return () => { unsubs.forEach(u => u()); clearTimeout(timeout); };
   }, []);
 
   return content;

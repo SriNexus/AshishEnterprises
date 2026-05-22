@@ -10,17 +10,26 @@ import { Button } from '@/components/ui/button';
 import { GALLERY_IMAGES } from '@/data/constants';
 import { fadeUp, staggerContainer } from '@/animations/variants';
 import { useScrollReveal } from '@/hooks/use-intersection';
+import { useSite } from '@/store/site-context';
 
-const categories = ['All', ...new Set(GALLERY_IMAGES.map((img) => img.category))];
+// Build categories from gallery data
 
 export default function GalleryPage() {
   const [filter, setFilter] = useState('All');
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const { ref, inView } = useScrollReveal();
+  const { gallery: firestoreGallery, hasFirestoreGallery } = useSite();
+
+  // Use Firestore gallery if available, otherwise static
+  const galleryData = hasFirestoreGallery
+    ? firestoreGallery.map(g => ({ id: g.id || '', title: g.title, category: g.category, description: g.description || '', imageUrl: g.imageUrl }))
+    : GALLERY_IMAGES;
+
+  const categories = ['All', ...new Set(galleryData.map((img) => img.category))];
 
   const filteredImages = filter === 'All'
-    ? GALLERY_IMAGES
-    : GALLERY_IMAGES.filter((img) => img.category === filter);
+    ? galleryData
+    : galleryData.filter((img) => img.category === filter);
 
   const openLightbox = (index: number) => setLightboxIndex(index);
   const closeLightbox = () => setLightboxIndex(null);
@@ -93,10 +102,14 @@ export default function GalleryPage() {
                 }`}
               >
                 <div className="relative aspect-square bg-gradient-to-br from-brand-secondary to-brand-secondary-dark overflow-hidden">
-                  {/* Placeholder */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Sun className="w-12 h-12 text-brand-primary/30" />
-                  </div>
+                  {/* Image or Placeholder */}
+                  {'imageUrl' in image && image.imageUrl ? (
+                    <img src={image.imageUrl as string} alt={image.title} className="absolute inset-0 w-full h-full object-cover" />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Sun className="w-12 h-12 text-brand-primary/30" />
+                    </div>
+                  )}
 
                   {/* Hover Overlay */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">

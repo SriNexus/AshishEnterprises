@@ -13,22 +13,33 @@ import { Input } from '@/components/ui/input';
 import { BLOG_POSTS } from '@/data/constants';
 import { fadeUp, staggerContainer } from '@/animations/variants';
 import { useScrollReveal } from '@/hooks/use-intersection';
-
-const categories = ['All', ...new Set(BLOG_POSTS.map((post) => post.category))];
+import { useSite } from '@/store/site-context';
 
 export default function BlogPage() {
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const { ref, inView } = useScrollReveal();
+  const { blogPosts: firestorePosts, hasFirestoreBlog } = useSite();
 
-  const filteredPosts = BLOG_POSTS.filter((post) => {
+  // Use Firestore posts if available, otherwise static
+  const allPosts = hasFirestoreBlog
+    ? firestorePosts.map(p => ({
+        id: p.id || '', slug: p.slug, title: p.title, excerpt: p.excerpt,
+        category: p.category, author: p.author, date: p.createdAt ? '' : '',
+        readTime: p.readTime || '', featured: false, featuredImage: p.featuredImage,
+      }))
+    : BLOG_POSTS;
+
+  const categories = ['All', ...new Set(allPosts.map((post) => post.category))];
+
+  const filteredPosts = allPosts.filter((post) => {
     const matchesCategory = filter === 'All' || post.category === filter;
     const matchesSearch = post.title.toLowerCase().includes(search.toLowerCase()) ||
       post.excerpt.toLowerCase().includes(search.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
-  const featuredPosts = BLOG_POSTS.filter((post) => post.featured);
+  const featuredPosts = allPosts.filter((post) => post.featured);
 
   return (
     <MainLayout>

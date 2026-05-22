@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { PRODUCTS, SITE_CONFIG } from '@/data/constants';
 import { fadeUp, staggerContainer } from '@/animations/variants';
 import { useScrollReveal } from '@/hooks/use-intersection';
+import { useSite } from '@/store/site-context';
 
 const categoryIcons: Record<string, React.ElementType> = {
   'solar-panels': Sun,
@@ -24,6 +25,7 @@ const categoryIcons: Record<string, React.ElementType> = {
 export default function ProductsPage() {
   const [activeCategory, setActiveCategory] = useState<string>(PRODUCTS[0].id);
   const { ref, inView } = useScrollReveal();
+  const { products: firestoreProducts, hasFirestoreProducts } = useSite();
 
   const activeProduct = PRODUCTS.find((p) => p.id === activeCategory);
   const Icon = categoryIcons[activeCategory] || Sun;
@@ -167,8 +169,49 @@ export default function ProductsPage() {
         </AnimatePresence>
       </Section>
 
+      {/* Firestore Products (admin-managed) */}
+      {hasFirestoreProducts && firestoreProducts.length > 0 && (
+        <Section background="secondary" padding="lg">
+          <SectionHeading badge="From Admin" title="Featured Products" subtitle="Products managed through our CMS" />
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {firestoreProducts.map((product) => (
+              <Card key={product.id} className="h-full" padding="md">
+                {product.images?.[0] && (
+                  <div className="aspect-video rounded-xl overflow-hidden mb-4 bg-surface-secondary">
+                    <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <h4 className="font-bold text-content-primary">{product.name}</h4>
+                  {product.brand && <Badge variant="secondary">{product.brand}</Badge>}
+                  <p className="text-sm text-content-secondary">{product.description}</p>
+                  {product.specifications && Object.keys(product.specifications).length > 0 && (
+                    <div className="pt-3 space-y-1.5 text-xs text-content-secondary border-t border-line mt-3">
+                      {Object.entries(product.specifications).map(([key, value]) => (
+                        <div key={key} className="flex justify-between">
+                          <span className="capitalize">{key}</span>
+                          <span className="font-medium text-content-primary">{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="pt-3">
+                    <a href={`https://wa.me/${SITE_CONFIG.whatsapp}?text=Hi! I want to inquire about ${product.name}.`}
+                      target="_blank" rel="noopener noreferrer">
+                      <Button size="sm" fullWidth variant="outline" icon={<Info className="h-4 w-4" />}>
+                        Inquire Now
+                      </Button>
+                    </a>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </Section>
+      )}
+
       {/* Why Choose Our Products */}
-      <Section background="secondary" padding="lg">
+      <Section background={hasFirestoreProducts ? "primary" : "secondary"} padding="lg">
         <SectionHeading
           badge="Quality Assurance"
           title="Why Choose Our Products?"

@@ -58,11 +58,10 @@ export function uploadFile(
   onProgress?: (progress: UploadProgress) => void
 ): Promise<UploadResult> {
   return new Promise((resolve, reject) => {
-    const storageRef = ref(storage, path);
-    
-    // Set proper content type
-    const metadata = { contentType: file.type };
-    const uploadTask = uploadBytesResumable(storageRef, file, metadata);
+    try {
+      const storageRef = ref(storage, path);
+      const metadata = { contentType: file.type || 'application/octet-stream' };
+      const uploadTask = uploadBytesResumable(storageRef, file, metadata);
 
     uploadTask.on(
       'state_changed',
@@ -87,6 +86,10 @@ export function uploadFile(
         }
       }
     );
+    } catch (error) {
+      console.error('Storage init error:', error);
+      reject(error);
+    }
   });
 }
 

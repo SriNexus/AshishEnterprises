@@ -32,6 +32,7 @@ export function Logo({ className, showText = true, size = 'md' }: LogoProps) {
           src={logoUrl}
           alt={config.name}
           className={cn(s.img, 'w-auto object-contain')}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
       ) : (
         <>

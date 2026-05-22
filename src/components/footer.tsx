@@ -106,6 +106,7 @@ export function Footer() {
             <Link to="/privacy-policy" className="hover:text-white/70 transition-colors">{t.footer.privacy}</Link>
             <Link to="/terms" className="hover:text-white/70 transition-colors">{t.footer.terms}</Link>
             <Link to="/faq" className="hover:text-white/70 transition-colors">{t.faq.badge}</Link>
+            <Link to="/admin/login" className="hover:text-white/70 transition-colors">Admin</Link>
           </div>
         </motion.div>
       </motion.div>

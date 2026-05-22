@@ -1,40 +1,19 @@
 import { createContext, useContext, type ReactNode } from 'react';
-import { useSiteContent } from '@/hooks/use-site-content';
-import type { TestimonialData, FAQData, ServiceData, ProjectData, StatData } from '@/types';
-import type { SettingsDoc } from '@/types/admin';
-import {
-  SITE_CONFIG as STATIC_CONFIG,
-} from '@/data/constants';
+import { useSiteContent, type SiteContent } from '@/hooks/use-site-content';
+import { SITE_CONFIG as STATIC_CONFIG } from '@/data/constants';
 
-interface SiteConfig {
-  name: string;
-  tagline: string;
-  description: string;
-  phone: string;
-  whatsapp: string;
-  email: string;
-  address: string;
-  socialLinks: {
-    facebook: string;
-    instagram: string;
-    linkedin: string;
-    twitter: string;
-    youtube: string;
-  };
-}
+const defaultConfig = {
+  name: STATIC_CONFIG.name,
+  tagline: STATIC_CONFIG.tagline,
+  description: STATIC_CONFIG.description,
+  phone: STATIC_CONFIG.phone,
+  email: STATIC_CONFIG.email,
+  whatsapp: STATIC_CONFIG.whatsapp,
+  address: STATIC_CONFIG.address,
+  socialLinks: { ...STATIC_CONFIG.socialLinks },
+};
 
-interface SiteContextType {
-  testimonials: TestimonialData[];
-  faqs: FAQData[];
-  services: ServiceData[];
-  projects: ProjectData[];
-  stats: StatData[];
-  settings: SettingsDoc | null;
-  config: SiteConfig;
-  loading: boolean;
-}
-
-const SiteContext = createContext<SiteContextType | null>(null);
+const SiteContext = createContext<SiteContent | null>(null);
 
 export function SiteProvider({ children }: { children: ReactNode }) {
   const content = useSiteContent();
@@ -42,22 +21,21 @@ export function SiteProvider({ children }: { children: ReactNode }) {
 }
 
 /**
- * Use this hook in any frontend component to get realtime CMS data.
- * Falls back to static constants if context is not available.
+ * Access all site content including Firestore-synced data.
+ * Falls back to static defaults when used outside SiteProvider.
  */
-export function useSite(): SiteContextType {
+export function useSite(): SiteContent {
   const ctx = useContext(SiteContext);
   if (!ctx) {
-    // Fallback when used outside provider (e.g., admin pages)
     return {
-      testimonials: [],
-      faqs: [],
-      services: [],
-      projects: [],
-      stats: [],
-      settings: null,
-      config: STATIC_CONFIG as unknown as SiteConfig,
+      testimonials: [], faqs: [], services: [], projects: [],
+      products: [], gallery: [], blogPosts: [],
+      stats: [], settings: null,
+      config: defaultConfig as SiteContent['config'],
       loading: false,
+      hasFirestoreProducts: false,
+      hasFirestoreGallery: false,
+      hasFirestoreBlog: false,
     };
   }
   return ctx;

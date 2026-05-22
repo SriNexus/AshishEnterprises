@@ -8,7 +8,6 @@ import { NAV_LINKS, SITE_CONFIG } from '@/data/constants';
 import { Logo } from '@/components/ui/logo';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { LanguageToggle } from '@/components/ui/language-toggle';
 import { mobileMenuVariants, mobileMenuItemVariants } from '@/animations/variants';
 
 /**
@@ -65,7 +64,6 @@ export function Navbar() {
 
             {/* Desktop Actions */}
             <div className="hidden lg:flex items-center gap-3">
-              <LanguageToggle />
               <ThemeToggle />
               <Link to="/contact">
                 <Button
@@ -80,7 +78,6 @@ export function Navbar() {
 
             {/* Mobile Actions */}
             <div className="flex lg:hidden items-center gap-2">
-              <LanguageToggle />
               <ThemeToggle />
               <motion.button
                 whileTap={{ scale: 0.9 }}
