@@ -149,7 +149,7 @@ export default function AdminBlogPage() {
           </p>
         </div>
         <Button
-          onClick={() => navigate('/admin/blog/new')}
+          onClick={() => navigate('/admin/panel/blog/new')}
           icon={<Plus className="w-4 h-4" />}
         >
           New Post

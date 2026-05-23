@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { STRINGS } from '@/lib/strings';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -9,17 +10,44 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
-import { SITE_CONFIG, SERVICES } from '@/data/constants';
+import { SITE_CONFIG } from '@/data/constants';
 import { contactFormSchema, type ContactFormSchema } from '@/lib/validations';
 import { submitContactForm } from '@/services/contact';
 import { fadeLeft, fadeRight } from '@/animations/variants';
-import { useTranslation } from '@/hooks/useTranslation';
+import { useSite } from '@/store/site-context';
+import { EditableSection } from '@/components/visual-editor/editable-section';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '@/firebase/config';
+import { COLLECTIONS } from '@/firebase/collections';
 
-const serviceOptions = SERVICES.map((s) => ({ value: s.id, label: s.title }));
+interface ServiceOption { value: string; label: string; }
 
 export function ContactCTASection() {
   const [submitted, setSubmitted] = useState(false);
-  const { t } = useTranslation();
+  const { config } = useSite();
+  const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([]);
+
+  // Load services dynamically from Firestore
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(collection(db, COLLECTIONS.SERVICES), where('isPublished', '==', true)),
+      (snap) => {
+        if (snap.docs.length > 0) {
+          setServiceOptions(snap.docs.map(d => ({ value: d.id, label: (d.data() as { title: string }).title })));
+        } else {
+          // Fallback: static services
+          import('@/data/constants').then(({ SERVICES }) => {
+            setServiceOptions(SERVICES.map(s => ({ value: s.id, label: s.title })));
+          });
+        }
+      }, () => {
+        import('@/data/constants').then(({ SERVICES }) => {
+          setServiceOptions(SERVICES.map(s => ({ value: s.id, label: s.title })));
+        });
+      }
+    );
+    return () => unsub();
+  }, []);
 
   const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<ContactFormSchema>({
     resolver: zodResolver(contactFormSchema),
@@ -31,77 +59,77 @@ export function ContactCTASection() {
     if (result.success) { setSubmitted(true); reset(); setTimeout(() => setSubmitted(false), 6000); }
   };
 
+  const phone = config.phone || SITE_CONFIG.phone;
+  const email = config.email || SITE_CONFIG.email;
+  const address = config.address || SITE_CONFIG.address;
+  const whatsapp = config.whatsapp || SITE_CONFIG.whatsapp;
+
   return (
-    <Section id="contact" background="primary" padding="lg">
-      <SectionHeading badge={t.contact.badge} title={t.contact.title} subtitle={t.contact.subtitle} />
-
-      <div className="grid lg:grid-cols-5 gap-10 lg:gap-12">
-        <motion.div variants={fadeLeft} className="lg:col-span-2 space-y-5">
-          {[
-            { icon: Phone, title: t.contact.callUs, value: SITE_CONFIG.phone, href: `tel:${SITE_CONFIG.phone}`, sub: 'Mon–Sat, 9AM–7PM' },
-            { icon: Mail, title: t.contact.emailUs, value: SITE_CONFIG.email, href: `mailto:${SITE_CONFIG.email}`, sub: '24h response' },
-            { icon: MapPin, title: t.contact.visitUs, value: SITE_CONFIG.address, href: null, sub: '' },
-          ].map(({ icon: Icon, title, value, href, sub }) => (
-            <div key={title} className="flex items-start gap-4 p-5 rounded-2xl bg-surface-secondary border border-line hover:border-brand-primary/20 transition-colors">
-              <div className="w-11 h-11 rounded-xl bg-brand-primary/10 flex items-center justify-center flex-shrink-0">
-                <Icon className="h-5 w-5 text-brand-primary" />
+    <EditableSection id="contact-cta" label="Contact Section">
+      <Section id="contact" background="primary" padding="lg">
+        <SectionHeading badge={STRINGS.contact.badge} title={STRINGS.contact.title} subtitle={STRINGS.contact.subtitle} />
+        <div className="grid lg:grid-cols-5 gap-10 lg:gap-12">
+          <motion.div variants={fadeLeft} className="lg:col-span-2 space-y-5">
+            {[
+              { icon: Phone, title: STRINGS.contact.callUs, value: phone, href: `tel:${phone}`, sub: 'Mon–Sat, 9AM–7PM' },
+              { icon: Mail, title: STRINGS.contact.emailUs, value: email, href: `mailto:${email}`, sub: '24h response' },
+              { icon: MapPin, title: STRINGS.contact.visitUs, value: address, href: null as string | null, sub: '' },
+            ].map(({ icon: Icon, title, value, href, sub }) => (
+              <div key={title} className="flex items-start gap-4 p-5 rounded-2xl bg-surface-secondary border border-line hover:border-brand-primary/20 transition-colors">
+                <div className="w-11 h-11 rounded-xl bg-brand-primary/10 flex items-center justify-center flex-shrink-0"><Icon className="h-5 w-5 text-brand-primary" /></div>
+                <div>
+                  <h4 className="text-sm font-semibold text-content-primary">{title}</h4>
+                  {href ? <a href={href} className="text-sm text-content-secondary hover:text-brand-primary transition-colors">{value}</a>
+                    : <p className="text-sm text-content-secondary">{value}</p>}
+                  {sub && <p className="text-xs text-content-tertiary mt-0.5">{sub}</p>}
+                </div>
               </div>
+            ))}
+
+            <a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-3 p-5 rounded-2xl bg-green-500/10 border border-green-500/20 hover:bg-green-500/15 transition-colors group">
+              <div className="w-11 h-11 rounded-xl bg-green-500/20 flex items-center justify-center flex-shrink-0"><MessageCircle className="h-5 w-5 text-green-500" /></div>
               <div>
-                <h4 className="text-sm font-semibold text-content-primary">{title}</h4>
-                {href ? <a href={href} className="text-sm text-content-secondary hover:text-brand-primary transition-colors">{value}</a>
-                  : <p className="text-sm text-content-secondary">{value}</p>}
-                {sub && <p className="text-xs text-content-tertiary mt-0.5">{sub}</p>}
+                <p className="text-sm font-semibold text-green-600 dark:text-green-400">{STRINGS.contact.whatsapp}</p>
+                <p className="text-xs text-content-secondary">Chat instantly</p>
+              </div>
+            </a>
+
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-brand-primary to-brand-primary-dark text-white">
+              <div className="flex items-center gap-2 mb-3"><Clock className="h-4 w-4 opacity-80" /><h4 className="font-semibold text-sm">{STRINGS.contact.businessHours}</h4></div>
+              <div className="space-y-1.5 text-sm text-white/80">
+                <div className="flex justify-between"><span>{STRINGS.contact.monSat}</span><span className="font-medium text-white">9 AM – 7 PM</span></div>
+                <div className="flex justify-between"><span>{STRINGS.contact.sunday}</span><span className="font-medium text-white">{STRINGS.contact.byAppointment}</span></div>
               </div>
             </div>
-          ))}
+          </motion.div>
 
-          <a href={`https://wa.me/${SITE_CONFIG.whatsapp}`} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-3 p-5 rounded-2xl bg-green-500/10 border border-green-500/20 hover:bg-green-500/15 transition-colors group">
-            <div className="w-11 h-11 rounded-xl bg-green-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/30 transition-colors">
-              <MessageCircle className="h-5 w-5 text-green-500" />
+          <motion.div variants={fadeRight} className="lg:col-span-3">
+            <div className="bg-surface-card rounded-3xl border border-line p-6 sm:p-8">
+              {submitted ? (
+                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mb-5"><CheckCircle2 className="h-8 w-8 text-green-500" /></div>
+                  <h3 className="text-xl font-bold text-content-primary mb-2">{STRINGS.contact.thankYou}</h3>
+                  <p className="text-content-secondary">{STRINGS.contact.thankYouMsg}</p>
+                </motion.div>
+              ) : (
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+                  <div className="grid sm:grid-cols-2 gap-5">
+                    <Input label={STRINGS.forms.name} placeholder="John Doe" error={errors.name?.message} {...register('name')} />
+                    <Input label={STRINGS.forms.email} type="email" placeholder="john@example.com" error={errors.email?.message} {...register('email')} />
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-5">
+                    <Input label={STRINGS.forms.phone} type="tel" placeholder="+91 88812 04444" error={errors.phone?.message} {...register('phone')} />
+                    <Select label={STRINGS.forms.service} placeholder={STRINGS.forms.selectService} options={serviceOptions} error={errors.service?.message} {...register('service')} />
+                  </div>
+                  <Textarea label={STRINGS.forms.message} placeholder="..." error={errors.message?.message} {...register('message')} />
+                  <Button type="submit" size="lg" fullWidth isLoading={isSubmitting} icon={<Send className="h-4 w-4" />}>{STRINGS.contact.sendMessage}</Button>
+                </form>
+              )}
             </div>
-            <div>
-              <p className="text-sm font-semibold text-green-600 dark:text-green-400">{t.contact.whatsapp}</p>
-              <p className="text-xs text-content-secondary">Chat instantly</p>
-            </div>
-          </a>
-
-          <div className="p-5 rounded-2xl bg-gradient-to-br from-brand-primary to-brand-primary-dark text-white">
-            <div className="flex items-center gap-2 mb-3"><Clock className="h-4 w-4 opacity-80" /><h4 className="font-semibold text-sm">{t.contact.businessHours}</h4></div>
-            <div className="space-y-1.5 text-sm text-white/80">
-              <div className="flex justify-between"><span>{t.contact.monSat}</span><span className="font-medium text-white">9 AM – 7 PM</span></div>
-              <div className="flex justify-between"><span>{t.contact.sunday}</span><span className="font-medium text-white">{t.contact.byAppointment}</span></div>
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div variants={fadeRight} className="lg:col-span-3">
-          <div className="bg-surface-card rounded-3xl border border-line p-6 sm:p-8">
-            {submitted ? (
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mb-5"><CheckCircle2 className="h-8 w-8 text-green-500" /></div>
-                <h3 className="text-xl font-bold text-content-primary mb-2">{t.contact.thankYou}</h3>
-                <p className="text-content-secondary">{t.contact.thankYouMsg}</p>
-              </motion.div>
-            ) : (
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-                <div className="grid sm:grid-cols-2 gap-5">
-                  <Input label={t.forms.name} placeholder="John Doe" error={errors.name?.message} {...register('name')} />
-                  <Input label={t.forms.email} type="email" placeholder="john@example.com" error={errors.email?.message} {...register('email')} />
-                </div>
-                <div className="grid sm:grid-cols-2 gap-5">
-                  <Input label={t.forms.phone} type="tel" placeholder="+91 88812 04444" error={errors.phone?.message} {...register('phone')} />
-                  <Select label={t.forms.service} placeholder={t.forms.selectService} options={serviceOptions} error={errors.service?.message} {...register('service')} />
-                </div>
-                <Textarea label={t.forms.message} placeholder="..." error={errors.message?.message} {...register('message')} />
-                <Button type="submit" size="lg" fullWidth isLoading={isSubmitting} icon={<Send className="h-4 w-4" />}>
-                  {t.contact.sendMessage}
-                </Button>
-              </form>
-            )}
-          </div>
-        </motion.div>
-      </div>
-    </Section>
+          </motion.div>
+        </div>
+      </Section>
+    </EditableSection>
   );
 }

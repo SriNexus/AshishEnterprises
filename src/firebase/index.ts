@@ -31,12 +31,9 @@ export {
 
 // Storage operations
 export {
-  uploadFile,
   uploadImage,
   deleteFile,
   deleteFileByUrl,
-  listFiles,
-  getImageUrl,
   compressImage,
   type UploadProgress,
   type UploadResult,

@@ -1,191 +1,226 @@
-import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { useForm } from 'react-hook-form';
-import { Save, Globe, Phone, Mail, Clock, Palette } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Card } from '@/components/ui/card';
-import { ImageUpload } from '@/components/admin/image-upload';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
+import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 import { COLLECTIONS } from '@/firebase/collections';
-import type { SettingsDoc } from '@/types/admin';
-import { fadeUp } from '@/animations/variants';
+import { SITE_CONFIG } from '@/data/constants';
+import { uploadImage } from '@/firebase/storage';
+import { Save, Globe, Phone, Share2, Image as ImageIcon, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const defaultSettings: SettingsDoc = {
-  id: 'main',
-  siteName: 'Ashish Enterprises',
-  tagline: 'Solar & Electrical Solutions',
-  email: 'ashishenterprises0151@gmail.com',
-  phone: '+91 98765 43210',
-  whatsapp: '918881204444',
-  address: 'Lamahi, Lalpur, Varanasi, Uttar Pradesh 221010',
-  socialLinks: { facebook: '', instagram: '', linkedin: '', twitter: '', youtube: '' },
-  businessHours: 'Mon-Sat: 9AM - 7PM',
+interface SiteSettings {
+  siteName: string;
+  tagline: string;
+  description: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  address: string;
+  logoUrl: string;
+  logoUrlDark: string;
+  faviconUrl: string;
+  socialLinks: {
+    facebook: string;
+    instagram: string;
+    linkedin: string;
+    twitter: string;
+    youtube: string;
+  };
+}
+
+const DEFAULT: SiteSettings = {
+  siteName: SITE_CONFIG.name,
+  tagline: SITE_CONFIG.tagline,
+  description: SITE_CONFIG.description,
+  phone: SITE_CONFIG.phone,
+  whatsapp: SITE_CONFIG.whatsapp,
+  email: SITE_CONFIG.email,
+  address: SITE_CONFIG.address,
+  logoUrl: '',
+  logoUrlDark: '',
+  faviconUrl: '',
+  socialLinks: SITE_CONFIG.socialLinks,
 };
 
-export default function AdminSettingsPage() {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [logoUrl, setLogoUrl] = useState('');
-  const [logoDarkUrl, setLogoDarkUrl] = useState('');
-  const [logoLightUrl, setLogoLightUrl] = useState('');
-  const [faviconUrl, setFaviconUrl] = useState('');
+function SettingsField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-content-secondary mb-1.5">{label}</label>
+      {children}
+    </div>
+  );
+}
 
-  const { register, handleSubmit, reset } = useForm<SettingsDoc>({ defaultValues: defaultSettings });
+function SettingsInput({ value, onChange, placeholder, type = 'text' }: { value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
+  return (
+    <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+      className="w-full px-3 py-2.5 rounded-xl border border-line bg-surface-secondary text-content-primary text-sm outline-none focus:border-brand-primary transition-colors" />
+  );
+}
 
-  useEffect(() => { fetchSettings(); }, []);
+function ImageUploadField({ label, currentUrl, onUpload, folder }: { label: string; currentUrl: string; onUpload: (url: string) => void; folder: string }) {
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
 
-  async function fetchSettings() {
-    setLoading(true);
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
     try {
-      const docRef = doc(db, COLLECTIONS.SETTINGS, 'main');
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data() as SettingsDoc;
-        reset(data);
-        setLogoUrl(data.logoUrl || '');
-        setLogoDarkUrl(data.logoDarkUrl || '');
-        setLogoLightUrl(data.logoLightUrl || '');
-        setFaviconUrl(data.faviconUrl || '');
-      }
-    } catch (error) {
-      console.error('Failed to fetch settings:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const onSubmit = async (data: SettingsDoc) => {
-    setSaving(true);
-    try {
-      const docRef = doc(db, COLLECTIONS.SETTINGS, 'main');
-      await setDoc(docRef, {
-        ...data,
-        logoUrl,
-        logoDarkUrl,
-        logoLightUrl,
-        faviconUrl,
-        id: 'main',
-      });
-      toast.success('Settings saved — website will update automatically');
-    } catch (error) {
-      console.error('Failed to save settings:', error);
-      toast.error('Failed to save settings');
-    } finally {
-      setSaving(false);
-    }
+      const result = await uploadImage(file, folder, ({ progress: p }) => setProgress(Math.round(p)));
+      onUpload(result.url);
+      toast.success(`${label} uploaded!`);
+    } catch { toast.error('Upload failed'); }
+    finally { setUploading(false); e.target.value = ''; }
   };
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-2 border-brand-primary border-t-transparent rounded-full" /></div>;
+  return (
+    <div className="space-y-2">
+      {currentUrl && (
+        <div className="flex items-center gap-3 p-3 bg-surface-secondary rounded-xl border border-line">
+          <img src={currentUrl} alt={label} className="h-10 w-auto object-contain rounded" />
+          <span className="text-xs text-content-tertiary truncate flex-1">{currentUrl.split('/').pop()}</span>
+        </div>
+      )}
+      <label className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-line hover:border-brand-primary text-content-secondary hover:text-brand-primary transition-colors cursor-pointer text-sm ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
+        <input type="file" accept="image/png,image/svg+xml,image/webp,image/jpeg" onChange={handleFile} className="hidden" />
+        {uploading ? <><Loader2 className="h-4 w-4 animate-spin" /> Uploading {progress}%</> : <><ImageIcon className="h-4 w-4" /> {currentUrl ? 'Replace' : 'Upload'} {label}</>}
+      </label>
+    </div>
+  );
+}
+
+export default function SettingsPage() {
+  const [settings, setSettings] = useState<SiteSettings>(DEFAULT);
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, COLLECTIONS.SETTINGS, 'main'), (snap) => {
+      if (snap.exists()) setSettings({ ...DEFAULT, ...snap.data() as SiteSettings });
+      setLoaded(true);
+    }, () => setLoaded(true));
+    return () => unsub();
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await setDoc(doc(db, COLLECTIONS.SETTINGS, 'main'), { ...settings, updatedAt: serverTimestamp() }, { merge: true });
+      toast.success('Settings saved!');
+    } catch { toast.error('Save failed'); }
+    finally { setSaving(false); }
+  };
+
+  const set = (field: keyof SiteSettings) => (v: string) => setSettings(s => ({ ...s, [field]: v }));
+  const setSocial = (key: keyof SiteSettings['socialLinks']) => (v: string) =>
+    setSettings(s => ({ ...s, socialLinks: { ...s.socialLinks, [key]: v } }));
+
+  if (!loaded) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-brand-primary" />
+      </div>
+    );
   }
 
   return (
-    <motion.div variants={fadeUp} initial="hidden" animate="visible">
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-lg font-bold text-content-primary">Settings</h2>
-            <p className="text-sm text-content-secondary">Manage website settings & branding</p>
+    <div className="max-w-3xl mx-auto space-y-8 pb-12">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-content-primary">Site Settings</h1>
+          <p className="text-sm text-content-secondary mt-1">Manage all global site configuration from here.</p>
+        </div>
+        <button onClick={handleSave} disabled={saving}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-primary text-white font-semibold hover:bg-brand-primary-dark disabled:opacity-60 transition-colors cursor-pointer">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saving ? 'Saving…' : 'Save All Changes'}
+        </button>
+      </div>
+
+      {/* Branding */}
+      <div className="bg-surface-card rounded-2xl border border-line p-6 space-y-5">
+        <div className="flex items-center gap-2 mb-2">
+          <Globe className="h-5 w-5 text-brand-primary" />
+          <h2 className="text-lg font-bold text-content-primary">Branding</h2>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-5">
+          <SettingsField label="Company Name">
+            <SettingsInput value={settings.siteName} onChange={set('siteName')} placeholder="Ashish Enterprises" />
+          </SettingsField>
+          <SettingsField label="Tagline">
+            <SettingsInput value={settings.tagline} onChange={set('tagline')} placeholder="Solar & Electrical" />
+          </SettingsField>
+        </div>
+        <SettingsField label="Company Description">
+          <textarea value={settings.description} onChange={e => set('description')(e.target.value)} rows={3}
+            placeholder="Short company description..." className="w-full px-3 py-2.5 rounded-xl border border-line bg-surface-secondary text-content-primary text-sm outline-none focus:border-brand-primary transition-colors resize-vertical" />
+        </SettingsField>
+        <div className="grid sm:grid-cols-3 gap-5">
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-content-secondary">Logo (Light Mode)</label>
+            <ImageUploadField label="Logo" currentUrl={settings.logoUrl} onUpload={(url) => setSettings(s => ({ ...s, logoUrl: url }))} folder="logos" />
           </div>
-          <Button type="submit" isLoading={saving} icon={<Save className="w-4 h-4" />}>Save Changes</Button>
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-content-secondary">Logo (Dark/Footer)</label>
+            <ImageUploadField label="Dark Logo" currentUrl={settings.logoUrlDark} onUpload={(url) => setSettings(s => ({ ...s, logoUrlDark: url }))} folder="logos" />
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-content-secondary">Favicon</label>
+            <ImageUploadField label="Favicon" currentUrl={settings.faviconUrl} onUpload={(url) => setSettings(s => ({ ...s, faviconUrl: url }))} folder="logos" />
+          </div>
         </div>
+      </div>
 
-        <div className="grid lg:grid-cols-2 gap-6">
-
-          {/* ── Branding ─────────────────────────── */}
-          <Card padding="lg" className="lg:col-span-2">
-            <h3 className="font-semibold text-content-primary mb-6 flex items-center gap-2">
-              <Palette className="w-5 h-5 text-brand-primary" />
-              Branding
-            </h3>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-content-primary mb-2">Main Logo</label>
-                <p className="text-xs text-content-tertiary mb-2">Used in navbar & general display</p>
-                <ImageUpload value={logoUrl} onChange={url => setLogoUrl(Array.isArray(url) ? url[0] : url)} folder="branding" />
-                {logoUrl && (
-                  <div className="mt-3 p-3 rounded-lg bg-surface-secondary border border-line flex items-center justify-center h-16">
-                    <img src={logoUrl} alt="Logo preview" className="max-h-full max-w-full object-contain" />
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-content-primary mb-2">Dark Mode Logo</label>
-                <p className="text-xs text-content-tertiary mb-2">Optional — used on dark backgrounds</p>
-                <ImageUpload value={logoDarkUrl} onChange={url => setLogoDarkUrl(Array.isArray(url) ? url[0] : url)} folder="branding" />
-                {logoDarkUrl && (
-                  <div className="mt-3 p-3 rounded-lg bg-gray-900 border border-line flex items-center justify-center h-16">
-                    <img src={logoDarkUrl} alt="Dark logo" className="max-h-full max-w-full object-contain" />
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-content-primary mb-2">Light Mode Logo</label>
-                <p className="text-xs text-content-tertiary mb-2">Optional — used on light backgrounds</p>
-                <ImageUpload value={logoLightUrl} onChange={url => setLogoLightUrl(Array.isArray(url) ? url[0] : url)} folder="branding" />
-                {logoLightUrl && (
-                  <div className="mt-3 p-3 rounded-lg bg-white border border-line flex items-center justify-center h-16">
-                    <img src={logoLightUrl} alt="Light logo" className="max-h-full max-w-full object-contain" />
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-content-primary mb-2">Favicon</label>
-                <p className="text-xs text-content-tertiary mb-2">Browser tab icon (32×32 recommended)</p>
-                <ImageUpload value={faviconUrl} onChange={url => setFaviconUrl(Array.isArray(url) ? url[0] : url)} folder="branding" />
-                {faviconUrl && (
-                  <div className="mt-3 p-3 rounded-lg bg-surface-secondary border border-line flex items-center justify-center h-16">
-                    <img src={faviconUrl} alt="Favicon" className="w-8 h-8 object-contain" />
-                  </div>
-                )}
-              </div>
-            </div>
-          </Card>
-
-          {/* ── Basic Info ────────────────────────── */}
-          <Card padding="lg">
-            <h3 className="font-semibold text-content-primary mb-4 flex items-center gap-2">
-              <Globe className="w-5 h-5 text-brand-primary" />
-              Basic Information
-            </h3>
-            <div className="space-y-4">
-              <Input label="Site Name" {...register('siteName')} />
-              <Input label="Tagline" {...register('tagline')} />
-            </div>
-          </Card>
-
-          {/* ── Contact Info ──────────────────────── */}
-          <Card padding="lg">
-            <h3 className="font-semibold text-content-primary mb-4 flex items-center gap-2">
-              <Phone className="w-5 h-5 text-brand-primary" />
-              Contact Information
-            </h3>
-            <div className="space-y-4">
-              <Input label="Phone" icon={<Phone className="w-4 h-4" />} {...register('phone')} />
-              <Input label="WhatsApp" {...register('whatsapp')} />
-              <Input label="Email" type="email" icon={<Mail className="w-4 h-4" />} {...register('email')} />
-              <Textarea label="Address" {...register('address')} />
-              <Input label="Business Hours" icon={<Clock className="w-4 h-4" />} {...register('businessHours')} />
-            </div>
-          </Card>
-
-          {/* ── Social Links ─────────────────────── */}
-          <Card padding="lg" className="lg:col-span-2">
-            <h3 className="font-semibold text-content-primary mb-4">Social Media</h3>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <Input label="Facebook" placeholder="https://facebook.com/..." {...register('socialLinks.facebook')} />
-              <Input label="Instagram" placeholder="https://instagram.com/..." {...register('socialLinks.instagram')} />
-              <Input label="LinkedIn" placeholder="https://linkedin.com/..." {...register('socialLinks.linkedin')} />
-              <Input label="Twitter / X" placeholder="https://twitter.com/..." {...register('socialLinks.twitter')} />
-              <Input label="YouTube" placeholder="https://youtube.com/..." {...register('socialLinks.youtube')} />
-            </div>
-          </Card>
+      {/* Contact Info */}
+      <div className="bg-surface-card rounded-2xl border border-line p-6 space-y-5">
+        <div className="flex items-center gap-2 mb-2">
+          <Phone className="h-5 w-5 text-brand-primary" />
+          <h2 className="text-lg font-bold text-content-primary">Contact Information</h2>
         </div>
-      </form>
-    </motion.div>
+        <div className="grid sm:grid-cols-2 gap-5">
+          <SettingsField label="Phone Number">
+            <SettingsInput value={settings.phone} onChange={set('phone')} placeholder="+91 88812 04444" />
+          </SettingsField>
+          <SettingsField label="WhatsApp Number (e.g. 918881204444)">
+            <SettingsInput value={settings.whatsapp} onChange={set('whatsapp')} placeholder="918881204444" />
+          </SettingsField>
+          <SettingsField label="Email Address">
+            <SettingsInput value={settings.email} onChange={set('email')} type="email" placeholder="info@example.com" />
+          </SettingsField>
+        </div>
+        <SettingsField label="Office Address">
+          <SettingsInput value={settings.address} onChange={set('address')} placeholder="Street, City, State, PIN" />
+        </SettingsField>
+      </div>
+
+      {/* Social Links */}
+      <div className="bg-surface-card rounded-2xl border border-line p-6 space-y-5">
+        <div className="flex items-center gap-2 mb-2">
+          <Share2 className="h-5 w-5 text-brand-primary" />
+          <h2 className="text-lg font-bold text-content-primary">Social Media Links</h2>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-5">
+          {([
+            { key: 'facebook', label: 'Facebook URL' },
+            { key: 'instagram', label: 'Instagram URL' },
+            { key: 'linkedin', label: 'LinkedIn URL' },
+            { key: 'twitter', label: 'Twitter/X URL' },
+            { key: 'youtube', label: 'YouTube URL' },
+          ] as { key: keyof SiteSettings['socialLinks']; label: string }[]).map(({ key, label }) => (
+            <SettingsField key={key} label={label}>
+              <SettingsInput value={settings.socialLinks[key]} onChange={setSocial(key)} placeholder={`https://${key}.com/...`} />
+            </SettingsField>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button onClick={handleSave} disabled={saving}
+          className="flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-primary text-white font-bold hover:bg-brand-primary-dark disabled:opacity-60 transition-colors cursor-pointer">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saving ? 'Saving…' : 'Save All Changes'}
+        </button>
+      </div>
+    </div>
   );
 }

@@ -1,215 +1,115 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Calendar, Clock, User, ArrowRight, Tag } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Calendar, Clock, Trash2 } from 'lucide-react';
 import { MainLayout } from '@/layouts/main-layout';
 import { PageHero } from '@/components/page-hero';
 import { Section } from '@/components/ui/section';
 import { SectionHeading } from '@/components/ui/section-heading';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { BLOG_POSTS } from '@/data/constants';
 import { fadeUp, staggerContainer } from '@/animations/variants';
 import { useScrollReveal } from '@/hooks/use-intersection';
-import { useSite } from '@/store/site-context';
+import { useVisualEditor } from '@/store/visual-editor-context';
+import { EditableSection } from '@/components/visual-editor/editable-section';
+import { EditModal, Field, FieldInput, FieldTextarea, FieldImageUpload } from '@/components/visual-editor/edit-modal';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, orderBy, query, where } from 'firebase/firestore';
+import { db } from '@/firebase/config';
+import { COLLECTIONS } from '@/firebase/collections';
+import { BLOG_POSTS } from '@/data/constants';
+import toast from 'react-hot-toast';
+
+interface BlogItem { id: string; title: string; excerpt: string; category: string; author: string; featuredImage?: string; slug?: string; publishedAt?: { seconds: number }; readTime?: string; isPublished?: boolean; }
+const EMPTY: Omit<BlogItem, 'id'> = { title: '', excerpt: '', category: 'Solar Energy', author: 'Admin', featuredImage: '', slug: '', readTime: '5 min', isPublished: true };
 
 export default function BlogPage() {
-  const [filter, setFilter] = useState('All');
-  const [search, setSearch] = useState('');
   const { ref, inView } = useScrollReveal();
-  const { blogPosts: firestorePosts, hasFirestoreBlog } = useSite();
+  const { isEditMode } = useVisualEditor();
+  const [posts, setPosts] = useState<BlogItem[]>(
+    (BLOG_POSTS as unknown as BlogItem[]).map((p, i) => ({ ...p, id: String(i), isPublished: true }))
+  );
+  const [addOpen, setAddOpen] = useState(false);
+  const [draft, setDraft] = useState(EMPTY);
+  const [saving, setSaving] = useState(false);
 
-  // Use Firestore posts if available, otherwise static
-  const allPosts = hasFirestoreBlog
-    ? firestorePosts.map(p => ({
-        id: p.id || '', slug: p.slug, title: p.title, excerpt: p.excerpt,
-        category: p.category, author: p.author, date: p.createdAt ? '' : '',
-        readTime: p.readTime || '', featured: false, featuredImage: p.featuredImage,
-      }))
-    : BLOG_POSTS;
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(collection(db, COLLECTIONS.BLOG_POSTS), where('isPublished', '==', true), orderBy('createdAt', 'desc')),
+      (snap) => { if (snap.docs.length > 0) setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() } as BlogItem))); },
+      () => {}
+    );
+    return () => unsub();
+  }, []);
 
-  const categories = ['All', ...new Set(allPosts.map((post) => post.category))];
+  const handleAdd = async () => {
+    if (!draft.title) { toast.error('Title required'); return; }
+    setSaving(true);
+    try {
+      const slug = draft.slug || draft.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      await addDoc(collection(db, COLLECTIONS.BLOG_POSTS), { ...draft, slug, isPublished: true, content: draft.excerpt, tags: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(), publishedAt: serverTimestamp() });
+      setAddOpen(false); setDraft(EMPTY); toast.success('Post added!');
+    } catch { toast.error('Failed'); } finally { setSaving(false); }
+  };
 
-  const filteredPosts = allPosts.filter((post) => {
-    const matchesCategory = filter === 'All' || post.category === filter;
-    const matchesSearch = post.title.toLowerCase().includes(search.toLowerCase()) ||
-      post.excerpt.toLowerCase().includes(search.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this post?')) return;
+    try { await deleteDoc(doc(db, COLLECTIONS.BLOG_POSTS, id)); toast.success('Deleted'); }
+    catch { toast.error('Failed'); }
+  };
 
-  const featuredPosts = allPosts.filter((post) => post.featured);
+  const formatDate = (post: BlogItem) => {
+    if (post.publishedAt?.seconds) return new Date(post.publishedAt.seconds * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    return 'Recent';
+  };
 
   return (
     <MainLayout>
-      <PageHero
-        title="Blog & Resources"
-        subtitle="Stay informed with the latest news, tips, and insights about solar energy."
-        breadcrumbs={[{ label: 'Blog' }]}
-      />
-
-      {/* Featured Posts */}
-      <Section background="secondary" padding="md">
-        <SectionHeading
-          badge="Featured"
-          title="Top Articles"
-          subtitle="Our most popular and helpful articles."
-        />
-
-        <div className="grid md:grid-cols-3 gap-6">
-          {featuredPosts.slice(0, 3).map((post) => (
-            <motion.div
-              key={post.id}
-              variants={fadeUp}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-            >
-              <Link to={`/blog/${post.slug}`}>
-                <Card className="h-full group" padding="md">
-                  {/* Image Placeholder */}
-                  <div className="aspect-video rounded-xl bg-gradient-to-br from-brand-primary/10 to-brand-secondary/10 mb-4 overflow-hidden">
-                    <div className="w-full h-full flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
-                      <Tag className="w-12 h-12 text-brand-primary/30" />
+      <PageHero title="Solar Energy Blog" subtitle="Expert insights, tips, and news about solar energy and sustainable living." breadcrumbs={[{ label: 'Blog' }]} />
+      <EditableSection id="blog" label="Blog Posts" onAddItem={() => { setDraft(EMPTY); setAddOpen(true); }}>
+        <Section background="primary" padding="lg">
+          <SectionHeading badge="Blog" title="Latest Articles" subtitle="Stay informed with our solar energy insights." />
+          <motion.div ref={ref} variants={staggerContainer} initial="hidden" animate={inView ? 'visible' : 'hidden'}
+            className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {posts.map((post) => (
+              <motion.div key={post.id} variants={fadeUp} className="relative group/post">
+                {isEditMode && (
+                  <button onClick={() => handleDelete(post.id)} className="absolute top-2 right-2 z-20 p-1 bg-red-600 text-white rounded opacity-0 group-hover/post:opacity-100 transition-opacity cursor-pointer">
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
+                <Link to={`/blog/${post.slug || post.id}`} className="block h-full">
+                  <div className="group h-full rounded-2xl border border-line bg-surface-card overflow-hidden hover:shadow-xl hover:shadow-brand-primary/[0.04] hover:-translate-y-1 transition-all duration-300">
+                    <div className="aspect-[16/9] bg-gradient-to-br from-brand-primary/10 to-brand-primary/5 overflow-hidden">
+                      {post.featuredImage ? (
+                        <img src={post.featuredImage} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-3xl">☀️</div>
+                      )}
                     </div>
-                  </div>
-
-                  <Badge variant="primary" className="mb-3">{post.category}</Badge>
-
-                  <h3 className="font-bold text-content-primary group-hover:text-brand-primary transition-colors line-clamp-2 mb-2">
-                    {post.title}
-                  </h3>
-
-                  <p className="text-sm text-content-secondary line-clamp-2 mb-4">
-                    {post.excerpt}
-                  </p>
-
-                  <div className="flex items-center gap-4 text-xs text-content-tertiary">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {new Date(post.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {post.readTime}
-                    </span>
-                  </div>
-                </Card>
-              </Link>
-            </motion.div>
-          ))}
-        </div>
-      </Section>
-
-      {/* All Posts */}
-      <Section background="primary" padding="lg">
-        <SectionHeading
-          badge="All Articles"
-          title="Latest From Our Blog"
-          subtitle="Explore all our articles on solar energy, maintenance tips, and industry news."
-        />
-
-        {/* Search & Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-8">
-          <div className="flex-1 max-w-md">
-            <Input
-              placeholder="Search articles..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              icon={<Search className="h-4 w-4" />}
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setFilter(cat)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 cursor-pointer ${
-                  filter === cat
-                    ? 'bg-brand-primary text-white'
-                    : 'bg-surface-secondary border border-line text-content-secondary hover:border-brand-primary/30 hover:text-brand-primary'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Posts Grid */}
-        <motion.div
-          ref={ref}
-          variants={staggerContainer}
-          initial="hidden"
-          animate={inView ? 'visible' : 'hidden'}
-          className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6"
-        >
-          {filteredPosts.length > 0 ? (
-            filteredPosts.map((post) => (
-              <motion.div key={post.id} variants={fadeUp}>
-                <Link to={`/blog/${post.slug}`}>
-                  <Card className="h-full group" padding="md">
-                    {/* Image Placeholder */}
-                    <div className="aspect-video rounded-xl bg-gradient-to-br from-brand-primary/5 to-brand-secondary/5 mb-4 overflow-hidden">
-                      <div className="w-full h-full flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
-                        <Tag className="w-10 h-10 text-brand-primary/20" />
+                    <div className="p-5">
+                      <Badge variant="primary" className="mb-3 text-[11px]">{post.category}</Badge>
+                      <h3 className="text-base font-bold text-content-primary mb-2 line-clamp-2 group-hover:text-brand-primary transition-colors">{post.title}</h3>
+                      <p className="text-sm text-content-secondary leading-relaxed line-clamp-2 mb-4">{post.excerpt}</p>
+                      <div className="flex items-center gap-3 text-xs text-content-tertiary">
+                        <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{formatDate(post)}</span>
+                        {post.readTime && <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{post.readTime}</span>}
                       </div>
                     </div>
-
-                    <Badge variant="outline" className="mb-3">{post.category}</Badge>
-
-                    <h3 className="font-bold text-content-primary group-hover:text-brand-primary transition-colors line-clamp-2 mb-2">
-                      {post.title}
-                    </h3>
-
-                    <p className="text-sm text-content-secondary line-clamp-2 mb-4">
-                      {post.excerpt}
-                    </p>
-
-                    <div className="flex items-center justify-between text-xs text-content-tertiary pt-4 border-t border-line">
-                      <span className="flex items-center gap-1">
-                        <User className="h-3 w-3" />
-                        {post.author}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {post.readTime}
-                      </span>
-                    </div>
-                  </Card>
+                  </div>
                 </Link>
               </motion.div>
-            ))
-          ) : (
-            <div className="col-span-full text-center py-12">
-              <p className="text-content-secondary">No articles found matching your search.</p>
-            </div>
-          )}
-        </motion.div>
-      </Section>
+            ))}
+          </motion.div>
+        </Section>
+      </EditableSection>
 
-      {/* Newsletter CTA */}
-      <Section background="gradient" padding="lg">
-        <div className="text-center">
-          <h2 className="text-3xl sm:text-4xl font-bold font-heading text-white mb-4">
-            Stay Updated
-          </h2>
-          <p className="text-white/70 mb-8 max-w-xl mx-auto">
-            Subscribe to our newsletter for the latest solar energy tips and industry news.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center max-w-md mx-auto">
-            <input
-              type="email"
-              placeholder="Enter your email"
-              className="flex-1 px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-white/50 focus:outline-none focus:border-white/40"
-            />
-            <Button size="lg" icon={<ArrowRight className="h-5 w-5" />}>
-              Subscribe
-            </Button>
-          </div>
-        </div>
-      </Section>
+      <EditModal isOpen={addOpen} onClose={() => setAddOpen(false)} title="Add Blog Post" onSave={handleAdd} saving={saving}>
+        <Field label="Title"><FieldInput value={draft.title} onChange={v => setDraft(d => ({ ...d, title: v }))} placeholder="Post title" /></Field>
+        <Field label="Excerpt"><FieldTextarea value={draft.excerpt} onChange={v => setDraft(d => ({ ...d, excerpt: v }))} rows={3} placeholder="Short description..." /></Field>
+        <Field label="Category"><FieldInput value={draft.category} onChange={v => setDraft(d => ({ ...d, category: v }))} placeholder="Solar Energy" /></Field>
+        <Field label="Author"><FieldInput value={draft.author} onChange={v => setDraft(d => ({ ...d, author: v }))} placeholder="Author name" /></Field>
+        <Field label="Read Time"><FieldInput value={draft.readTime || ''} onChange={v => setDraft(d => ({ ...d, readTime: v }))} placeholder="5 min read" /></Field>
+        <Field label="Featured Image"><FieldImageUpload onUpload={url => setDraft(d => ({ ...d, featuredImage: url }))} folder="blog" /></Field>
+      </EditModal>
     </MainLayout>
   );
 }

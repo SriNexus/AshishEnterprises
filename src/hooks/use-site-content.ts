@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 import { COLLECTIONS } from '@/firebase/collections';
 import {
@@ -11,124 +11,130 @@ import {
   SITE_CONFIG as STATIC_CONFIG,
 } from '@/data/constants';
 import type { TestimonialData, FAQData, ServiceData, ProjectData, StatData } from '@/types';
-import type { SettingsDoc, ProductDoc, GalleryDoc, BlogPostDoc } from '@/types/admin';
+import type { SettingsDoc } from '@/types/admin';
 
 interface SiteConfig {
-  name: string;
-  tagline: string;
-  description: string;
-  phone: string;
-  whatsapp: string;
-  email: string;
-  address: string;
-  socialLinks: { facebook: string; instagram: string; linkedin: string; twitter: string; youtube: string };
+  name: string; tagline: string; description: string; phone: string;
+  whatsapp: string; email: string; address: string;
+  socialLinks: { facebook: string; instagram: string; linkedin: string; twitter: string; youtube: string; };
 }
 
-export interface SiteContent {
+interface SiteContent {
   testimonials: TestimonialData[];
   faqs: FAQData[];
   services: ServiceData[];
   projects: ProjectData[];
-  products: ProductDoc[];
-  gallery: GalleryDoc[];
-  blogPosts: BlogPostDoc[];
   stats: StatData[];
   settings: SettingsDoc | null;
   config: SiteConfig;
   loading: boolean;
-  /** True if Firestore products collection has data (so we use it instead of static) */
-  hasFirestoreProducts: boolean;
-  hasFirestoreGallery: boolean;
-  hasFirestoreBlog: boolean;
 }
 
-/* All subscriptions use inline onSnapshot with error handling */
-
+/**
+ * Realtime hook — subscribes to Firestore with onSnapshot.
+ * Falls back to static constants only while Firestore is loading.
+ * Once Firebase returns data (even empty), static fallback is dropped.
+ */
 export function useSiteContent(): SiteContent {
   const [content, setContent] = useState<SiteContent>({
     testimonials: STATIC_TESTIMONIALS,
     faqs: STATIC_FAQS,
     services: STATIC_SERVICES,
     projects: STATIC_PROJECTS,
-    products: [],
-    gallery: [],
-    blogPosts: [],
     stats: STATS,
     settings: null,
     config: STATIC_CONFIG as unknown as SiteConfig,
     loading: true,
-    hasFirestoreProducts: false,
-    hasFirestoreGallery: false,
-    hasFirestoreBlog: false,
   });
 
   useEffect(() => {
-    const unsubs: (() => void)[] = [];
-    let loaded = false;
+    const subs: (() => void)[] = [];
 
-    const markLoaded = () => {
-      if (!loaded) { loaded = true; setContent(prev => ({ ...prev, loading: false })); }
-    };
-
-    // ── Settings ──
-    try {
-      const unsub = onSnapshot(doc(db, COLLECTIONS.SETTINGS, 'main'), (snap) => {
-        if (snap.exists()) {
-          const d = snap.data() as SettingsDoc;
-          setContent(prev => ({
-            ...prev,
-            settings: d,
-            config: {
-              name: d.siteName || STATIC_CONFIG.name,
-              tagline: d.tagline || STATIC_CONFIG.tagline,
-              description: STATIC_CONFIG.description,
-              phone: d.phone || STATIC_CONFIG.phone,
-              email: d.email || STATIC_CONFIG.email,
-              whatsapp: d.whatsapp || STATIC_CONFIG.whatsapp,
-              address: d.address || STATIC_CONFIG.address,
-              socialLinks: { ...STATIC_CONFIG.socialLinks, ...d.socialLinks },
-            },
-          }));
-          if (d.faviconUrl) {
-            let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
-            if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
-            link.href = d.faviconUrl;
-          }
+    // Settings
+    const settingsSub = onSnapshot(doc(db, COLLECTIONS.SETTINGS, 'main'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data() as SettingsDoc;
+        setContent(prev => ({
+          ...prev,
+          settings: data,
+          config: {
+            name: data.siteName || STATIC_CONFIG.name,
+            tagline: data.tagline || STATIC_CONFIG.tagline,
+            description: STATIC_CONFIG.description,
+            phone: data.phone || STATIC_CONFIG.phone,
+            email: data.email || STATIC_CONFIG.email,
+            whatsapp: data.whatsapp || STATIC_CONFIG.whatsapp,
+            address: data.address || STATIC_CONFIG.address,
+            socialLinks: { ...STATIC_CONFIG.socialLinks, ...data.socialLinks },
+          },
+        }));
+        if (data.faviconUrl) {
+          let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+          if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+          link.href = data.faviconUrl;
         }
-        markLoaded();
-      }, () => markLoaded());
-      unsubs.push(unsub);
-    } catch { markLoaded(); }
+      }
+      setContent(prev => ({ ...prev, loading: false }));
+    }, () => setContent(prev => ({ ...prev, loading: false })));
+    subs.push(settingsSub);
 
-    // ── Helper for published collections ──
-    function sub<T>(colName: string, key: string, hasKey?: string) {
-      try {
-        const unsub = onSnapshot(collection(db, colName), (snap) => {
-          const docs = snap.docs
-            .map(d => ({ id: d.id, ...d.data() }))
-            .filter((d: Record<string, unknown>) => d.isPublished !== false) as T[];
-          if (docs.length > 0) {
-            setContent(prev => ({
-              ...prev,
-              [key]: docs,
-              ...(hasKey ? { [hasKey]: true } : {}),
-            }));
-          }
-        }, () => {});
-        unsubs.push(unsub);
-      } catch { /* keep static */ }
-    }
+    // Testimonials — always show Firestore data if available, else static
+    const testimonialsSub = onSnapshot(
+      query(collection(db, COLLECTIONS.TESTIMONIALS), where('isPublished', '==', true)),
+      (snap) => {
+        setContent(prev => ({
+          ...prev,
+          testimonials: snap.docs.length > 0
+            ? snap.docs.map(d => ({ id: d.id, ...d.data() } as unknown as TestimonialData))
+            : STATIC_TESTIMONIALS,
+        }));
+      }, () => {}
+    );
+    subs.push(testimonialsSub);
 
-    sub<TestimonialData>(COLLECTIONS.TESTIMONIALS, 'testimonials');
-    sub<FAQData>(COLLECTIONS.FAQ, 'faqs');
-    sub<ServiceData>(COLLECTIONS.SERVICES, 'services');
-    sub<ProjectData>(COLLECTIONS.PROJECTS, 'projects');
-    sub<ProductDoc>(COLLECTIONS.PRODUCTS, 'products', 'hasFirestoreProducts');
-    sub<GalleryDoc>(COLLECTIONS.GALLERY, 'gallery', 'hasFirestoreGallery');
-    sub<BlogPostDoc>(COLLECTIONS.BLOG_POSTS, 'blogPosts', 'hasFirestoreBlog');
+    // FAQs
+    const faqsSub = onSnapshot(
+      query(collection(db, COLLECTIONS.FAQ), where('isPublished', '==', true)),
+      (snap) => {
+        setContent(prev => ({
+          ...prev,
+          faqs: snap.docs.length > 0
+            ? snap.docs.map(d => ({ id: d.id, ...d.data() } as unknown as FAQData))
+            : STATIC_FAQS,
+        }));
+      }, () => {}
+    );
+    subs.push(faqsSub);
 
-    const timeout = setTimeout(markLoaded, 3000);
-    return () => { unsubs.forEach(u => u()); clearTimeout(timeout); };
+    // Services
+    const servicesSub = onSnapshot(
+      query(collection(db, COLLECTIONS.SERVICES), where('isPublished', '==', true)),
+      (snap) => {
+        setContent(prev => ({
+          ...prev,
+          services: snap.docs.length > 0
+            ? snap.docs.map(d => ({ id: d.id, ...d.data() } as unknown as ServiceData))
+            : STATIC_SERVICES,
+        }));
+      }, () => {}
+    );
+    subs.push(servicesSub);
+
+    // Projects
+    const projectsSub = onSnapshot(
+      query(collection(db, COLLECTIONS.PROJECTS), where('isPublished', '==', true)),
+      (snap) => {
+        setContent(prev => ({
+          ...prev,
+          projects: snap.docs.length > 0
+            ? snap.docs.map(d => ({ id: d.id, ...d.data() } as unknown as ProjectData))
+            : STATIC_PROJECTS,
+        }));
+      }, () => {}
+    );
+    subs.push(projectsSub);
+
+    return () => subs.forEach(unsub => unsub());
   }, []);
 
   return content;

@@ -92,7 +92,7 @@ export default function AdminFAQPage() {
           <h2 className="text-lg font-bold text-content-primary">FAQ</h2>
           <p className="text-sm text-content-secondary">Manage frequently asked questions</p>
         </div>
-        <Button onClick={() => navigate('/admin/faq/new')} icon={<Plus className="w-4 h-4" />}>
+        <Button onClick={() => navigate('/admin/panel/faq/new')} icon={<Plus className="w-4 h-4" />}>
           Add FAQ
         </Button>
       </div>

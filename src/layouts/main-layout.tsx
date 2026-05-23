@@ -4,34 +4,32 @@ import { Navbar } from '@/components/navbar';
 import { Footer } from '@/components/footer';
 import { BackToTop } from '@/components/ui/back-to-top';
 import { WhatsAppButton } from '@/components/whatsapp-button';
-import { SiteProvider } from '@/store/site-context';
-import { VisualEditorBar } from '@/components/admin/visual-editor-bar';
+import { AdminEditorToolbar, EditModePill } from '@/components/visual-editor/admin-editor-toolbar';
+import { useVisualEditor } from '@/store/visual-editor-context';
 
-interface MainLayoutProps {
-  children: ReactNode;
-}
+interface MainLayoutProps { children: ReactNode; }
 
-/**
- * Main page layout with SiteProvider for realtime CMS data.
- * All public pages inside this layout get live Firestore content.
- */
 export function MainLayout({ children }: MainLayoutProps) {
   const { pathname } = useLocation();
+  const { isAdmin } = useVisualEditor();
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [pathname]);
 
   return (
-    <SiteProvider>
-      <div className="flex flex-col min-h-screen">
-        <Navbar />
-        <main className="flex-1">{children}</main>
-        <Footer />
+    <div className="flex flex-col min-h-screen">
+      {/* Fixed admin toolbar (40px) — only renders for admins */}
+      <AdminEditorToolbar />
+      {/* Fixed navbar — offset by admin bar height when admin is present */}
+      <Navbar adminBarVisible={isAdmin} />
+      {/* Page content — spacer is emitted by Navbar itself */}
+      <main className="flex-1">{children}</main>
+      <Footer />
       <WhatsAppButton />
       <BackToTop />
-      <VisualEditorBar />
-      </div>
-    </SiteProvider>
+      {/* Edit mode indicator pill */}
+      <EditModePill />
+    </div>
   );
 }
