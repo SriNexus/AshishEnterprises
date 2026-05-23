@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { Sun, Lock, Mail, AlertCircle, ArrowRight, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { signInAdmin } from '@/firebase/auth';
+import { signInAdmin, onAuthChange, getAdminUser } from '@/firebase/auth';
 import { useAdminStore } from '@/store/admin-store';
 
 const loginSchema = z.object({
@@ -19,11 +19,29 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function AdminLoginPage() {
   const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated } = useAdminStore();
+  const { isAuthenticated, setUser, setAdminData, setLoading } = useAdminStore();
 
-  const from = (location.state as { from?: Location })?.from?.pathname || '/admin/panel';
+  const from = (location.state as { from?: Location })?.from?.pathname || '/admin';
+
+  // Verify actual Firebase auth state on mount
+  useEffect(() => {
+    const unsub = onAuthChange(async (user) => {
+      if (user) {
+        setUser(user);
+        const data = await getAdminUser(user.uid);
+        if (data) {
+          setAdminData(data);
+          navigate(from, { replace: true });
+        }
+      }
+      setLoading(false);
+      setChecking(false);
+    });
+    return () => unsub();
+  }, []);
 
   const {
     register,
@@ -33,8 +51,16 @@ export default function AdminLoginPage() {
     resolver: zodResolver(loginSchema),
   });
 
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-primary">
+        <div className="w-8 h-8 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   if (isAuthenticated) {
-    return <Navigate to="/admin/panel" replace />;
+    return <Navigate to={from} replace />;
   }
 
   const onSubmit = async (data: LoginFormData) => {

@@ -147,7 +147,7 @@ export default function GenericEditPage() {
   }
 
   if (!config) {
-    navigate('/admin/panel/panel');
+    navigate('/admin');
     return null;
   }
 

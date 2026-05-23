@@ -97,12 +97,12 @@ export default function AdminProductEditPage() {
         );
       } else {
         toast.error('Product not found');
-        navigate('/admin/panel/products');
+        navigate('/admin/products');
       }
     } catch (error) {
       console.error('Failed to fetch product:', error);
       toast.error('Failed to load product');
-      navigate('/admin/panel/products');
+      navigate('/admin/products');
     } finally {
       setLoading(false);
     }
@@ -127,7 +127,7 @@ export default function AdminProductEditPage() {
         await updateDocument(COLLECTIONS.PRODUCTS, id!, productData);
         toast.success('Product updated');
       }
-      navigate('/admin/panel/products');
+      navigate('/admin/products');
     } catch (error) {
       console.error('Failed to save product:', error);
       toast.error('Failed to save product');
@@ -142,7 +142,7 @@ export default function AdminProductEditPage() {
     try {
       await deleteDocument(COLLECTIONS.PRODUCTS, id);
       toast.success('Product deleted');
-      navigate('/admin/panel/products');
+      navigate('/admin/products');
     } catch (error) {
       console.error('Failed to delete product:', error);
       toast.error('Failed to delete product');
@@ -181,7 +181,7 @@ export default function AdminProductEditPage() {
           <div className="flex items-center gap-4">
             <button
               type="button"
-              onClick={() => navigate('/admin/panel/products')}
+              onClick={() => navigate('/admin/products')}
               className="p-2 rounded-lg hover:bg-surface-secondary transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-5 h-5" />

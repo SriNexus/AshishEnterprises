@@ -44,14 +44,21 @@ export async function getDocuments<T extends BaseDocument>(
   collectionName: CollectionName,
   constraints: QueryConstraint[] = []
 ): Promise<T[]> {
-  const collectionRef = collection(db, collectionName);
-  const q = query(collectionRef, ...constraints);
-  const querySnapshot = await getDocs(q);
-  
-  return querySnapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as T[];
+  try {
+    const collectionRef = collection(db, collectionName);
+    const q = query(collectionRef, ...constraints);
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as T[];
+  } catch {
+    // If query fails (e.g., missing index), try without constraints
+    try {
+      const collectionRef = collection(db, collectionName);
+      const querySnapshot = await getDocs(collectionRef);
+      return querySnapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as T[];
+    } catch {
+      return [];
+    }
+  }
 }
 
 /**
@@ -114,16 +121,27 @@ export async function getPaginatedDocuments<T extends BaseDocument>(
 }
 
 /**
- * Get collection count
+ * Get collection count — with fallback for missing indexes/collections
  */
 export async function getCollectionCount(
   collectionName: CollectionName,
   constraints: QueryConstraint[] = []
 ): Promise<number> {
-  const collectionRef = collection(db, collectionName);
-  const q = query(collectionRef, ...constraints);
-  const snapshot = await getCountFromServer(q);
-  return snapshot.data().count;
+  try {
+    const collectionRef = collection(db, collectionName);
+    const q = query(collectionRef, ...constraints);
+    const snapshot = await getCountFromServer(q);
+    return snapshot.data().count;
+  } catch {
+    // Fallback: count docs directly if getCountFromServer fails
+    try {
+      const collectionRef = collection(db, collectionName);
+      const snapshot = await getDocs(query(collectionRef));
+      return snapshot.size;
+    } catch {
+      return 0;
+    }
+  }
 }
 
 /**

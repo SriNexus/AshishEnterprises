@@ -1,64 +1,79 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-
-    // Helper: check if admin
-    function isAdmin() {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
       return request.auth != null;
     }
-
-    // Allow reading any public file
+    
+    // Allow public read access to all images
     match /{allPaths=**} {
       allow read: if true;
     }
-
-    // Only admins can upload/delete
-    match /hero/{file} {
-      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024;
+    
+    // Products images - admin only upload
+    match /products/{imageId} {
+      allow write: if isAuthenticated();
+    }
+    
+    // Gallery images - admin only upload
+    match /gallery/{imageId} {
+      allow write: if isAuthenticated();
+    }
+    
+    // Blog images - admin only upload
+    match /blog/{imageId} {
+      allow write: if isAuthenticated();
+    }
+    
+    // Settings/SEO images - admin only upload
+    match /settings/{imageId} {
+      allow write: if isAuthenticated();
+    }
+    
+    match /seo/{imageId} {
+      allow write: if isAuthenticated();
+    }
+    
+    // Projects images - admin only upload
+    match /projects/{imageId} {
+      allow write: if isAuthenticated();
+    }
+    
+    // Hero images
+    match /hero/{imageId} {
+      allow write: if isAuthenticated();
     }
 
-    match /about/{file} {
-      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024;
+    // Team images
+    match /team/{imageId} {
+      allow write: if isAuthenticated();
     }
 
-    match /services/{file} {
-      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024;
+    // Testimonial images
+    match /testimonials/{imageId} {
+      allow write: if isAuthenticated();
     }
 
-    match /products/{file} {
-      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024;
+    // Service images
+    match /services/{imageId} {
+      allow write: if isAuthenticated();
     }
 
-    match /projects/{file} {
-      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024;
+    // FAQ images
+    match /faq/{imageId} {
+      allow write: if isAuthenticated();
     }
 
-    match /gallery/{file} {
-      allow write: if isAdmin() && request.resource.size < 20 * 1024 * 1024;
+    // Branding assets (logo, favicon)
+    match /branding/{imageId} {
+      allow write: if isAuthenticated();
     }
 
-    match /blog/{file} {
-      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024;
-    }
-
-    match /logos/{file} {
-      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024;
-    }
-
-    match /team/{file} {
-      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024;
-    }
-
-    match /site-images/{file} {
-      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024;
-    }
-
-    match /testimonials/{file} {
-      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024;
-    }
-
-    match /videos/{file} {
-      allow write: if isAdmin() && request.resource.size < 200 * 1024 * 1024;
+    // Generic uploads folder - authenticated users only
+    match /uploads/{imageId} {
+      allow write: if isAuthenticated();
     }
   }
 }

@@ -125,7 +125,7 @@ export default function AdminProductsPage() {
           </p>
         </div>
         <Button
-          onClick={() => navigate('/admin/panel/products/new')}
+          onClick={() => navigate('/admin/products/new')}
           icon={<Plus className="w-4 h-4" />}
         >
           Add Product

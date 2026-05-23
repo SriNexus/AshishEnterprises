@@ -3,7 +3,6 @@ import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
-  HardDrive,
   Package,
   Briefcase,
   FolderKanban,
@@ -28,19 +27,18 @@ import { useNavigate } from 'react-router-dom';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/admin' },
-  { icon: Sparkles, label: 'Hero Section', path: '/admin/panel/hero' },
-  { icon: Package, label: 'Products', path: '/admin/panel/products' },
-  { icon: Briefcase, label: 'Services', path: '/admin/panel/services' },
-  { icon: FolderKanban, label: 'Projects', path: '/admin/panel/projects' },
-  { icon: Images, label: 'Gallery', path: '/admin/panel/gallery' },
-  { icon: HardDrive, label: 'Media Library', path: '/admin/panel/media' },
-  { icon: FileText, label: 'Blog Posts', path: '/admin/panel/blog' },
-  { icon: MessageSquareQuote, label: 'Testimonials', path: '/admin/panel/testimonials' },
-  { icon: HelpCircle, label: 'FAQ', path: '/admin/panel/faq' },
-  { icon: UserCircle, label: 'Team', path: '/admin/panel/team' },
-  { icon: Users, label: 'Leads', path: '/admin/panel/leads' },
-  { icon: Search, label: 'SEO', path: '/admin/panel/seo' },
-  { icon: Settings, label: 'Settings', path: '/admin/panel/settings' },
+  { icon: Sparkles, label: 'Hero Section', path: '/admin/hero' },
+  { icon: Package, label: 'Products', path: '/admin/products' },
+  { icon: Briefcase, label: 'Services', path: '/admin/services' },
+  { icon: FolderKanban, label: 'Projects', path: '/admin/projects' },
+  { icon: Images, label: 'Gallery', path: '/admin/gallery' },
+  { icon: FileText, label: 'Blog Posts', path: '/admin/blog' },
+  { icon: MessageSquareQuote, label: 'Testimonials', path: '/admin/testimonials' },
+  { icon: HelpCircle, label: 'FAQ', path: '/admin/faq' },
+  { icon: UserCircle, label: 'Team', path: '/admin/team' },
+  { icon: Users, label: 'Leads', path: '/admin/leads' },
+  { icon: Search, label: 'SEO', path: '/admin/seo' },
+  { icon: Settings, label: 'Settings', path: '/admin/settings' },
 ];
 
 interface AdminSidebarProps {
@@ -64,7 +62,7 @@ export function AdminSidebar({ collapsed, onToggle }: AdminSidebarProps) {
   };
 
   const isActive = (path: string) => {
-    if (path === '/admin/panel') return location.pathname === '/admin/panel';
+    if (path === '/admin') return location.pathname === '/admin';
     return location.pathname.startsWith(path);
   };
 

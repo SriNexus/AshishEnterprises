@@ -1,172 +1,224 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Sun, Battery, Lightbulb, Droplets, Cpu, Phone, MessageCircle, Edit2, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import { Sun, Battery, Lightbulb, Droplets, Cpu, ArrowRight, Phone, MessageCircle, Info, Package } from 'lucide-react';
 import { MainLayout } from '@/layouts/main-layout';
 import { PageHero } from '@/components/page-hero';
 import { Section } from '@/components/ui/section';
 import { SectionHeading } from '@/components/ui/section-heading';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { PRODUCTS, SITE_CONFIG } from '@/data/constants';
+import { SITE_CONFIG } from '@/data/constants';
 import { fadeUp, staggerContainer } from '@/animations/variants';
 import { useScrollReveal } from '@/hooks/use-intersection';
 import { useSite } from '@/store/site-context';
-import { useVisualEditor } from '@/store/visual-editor-context';
-import { EditableSection } from '@/components/visual-editor/editable-section';
-import { EditModal, Field, FieldInput, FieldTextarea, FieldImageUpload } from '@/components/visual-editor/edit-modal';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where } from 'firebase/firestore';
-import { db } from '@/firebase/config';
-import { COLLECTIONS } from '@/firebase/collections';
-import toast from 'react-hot-toast';
+import { useTranslation } from '@/hooks/useTranslation';
 
-interface ProductItem { id: string; name: string; category: string; description: string; brand?: string; images?: string[]; featured?: boolean; isPublished?: boolean; specifications?: Record<string, string>; }
-const EMPTY_PRODUCT: Omit<ProductItem, 'id'> = { name: '', category: '', description: '', brand: '', images: [], featured: false, isPublished: true };
-const categoryIcons: Record<string, React.ElementType> = { 'solar-panels': Sun, 'solar-inverters': Cpu, batteries: Battery, 'solar-street-lights': Lightbulb, 'solar-water-heaters': Droplets };
+const categoryIcons: Record<string, React.ElementType> = {
+  'solar-panels': Sun, 'solar-inverters': Cpu, 'batteries': Battery,
+  'solar-street-lights': Lightbulb, 'solar-water-heaters': Droplets,
+  'solar-systems': Sun, 'solar-accessories': Package,
+};
 
 export default function ProductsPage() {
   const { ref, inView } = useScrollReveal();
-  const { config } = useSite();
-  const { isEditMode } = useVisualEditor();
-  const [products, setProducts] = useState<ProductItem[]>(
-    (PRODUCTS as Array<{ id: string; name?: string; category?: string; description: string }>)
-      .map(p => ({ id: p.id, name: p.name || p.id, category: p.category || p.id, description: p.description, isPublished: true as const }))
-  );
-  const [addOpen, setAddOpen] = useState(false);
-  const [editItem, setEditItem] = useState<ProductItem | null>(null);
-  const [draft, setDraft] = useState(EMPTY_PRODUCT);
-  const [saving, setSaving] = useState(false);
-  const [activeCategory, setActiveCategory] = useState('');
+  const { products: fsProducts, hasFirestoreProducts, staticProducts } = useSite();
+  const { t } = useTranslation();
 
-  useEffect(() => {
-    const unsub = onSnapshot(
-      query(collection(db, COLLECTIONS.PRODUCTS), where('isPublished', '==', true)),
-      (snap) => {
-        if (snap.docs.length > 0) {
-          const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as ProductItem));
-          setProducts(docs);
-          if (!activeCategory) setActiveCategory(docs[0]?.id || '');
-        } else {
-          if (!activeCategory && PRODUCTS[0]) setActiveCategory(PRODUCTS[0].id);
-        }
-      }, () => { if (!activeCategory && PRODUCTS[0]) setActiveCategory(PRODUCTS[0].id); }
-    );
-    return () => unsub();
-  }, []);
+  // Firestore products grouped by category
+  const fsCategoryMap = new Map<string, typeof fsProducts>();
+  fsProducts.forEach(p => {
+    const cat = p.category || 'Other';
+    if (!fsCategoryMap.has(cat)) fsCategoryMap.set(cat, []);
+    fsCategoryMap.get(cat)!.push(p);
+  });
+  const fsCategories = Array.from(fsCategoryMap.keys());
 
-  const categories = [...new Set(products.map(p => p.category))];
-  const activeProduct = products.find(p => p.id === activeCategory) || products[0];
-  const Icon = categoryIcons[activeCategory] || Sun;
-  const whatsapp = config.whatsapp || SITE_CONFIG.whatsapp;
-  const phone = config.phone || SITE_CONFIG.phone;
-
-  const handleAdd = async () => {
-    if (!draft.name) { toast.error('Name required'); return; }
-    setSaving(true);
-    try {
-      await addDoc(collection(db, COLLECTIONS.PRODUCTS), { ...draft, isPublished: true, specifications: {}, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-      setAddOpen(false); setDraft(EMPTY_PRODUCT); toast.success('Product added!');
-    } catch { toast.error('Failed'); } finally { setSaving(false); }
-  };
-
-  const handleEditSave = async () => {
-    if (!editItem) return;
-    setSaving(true);
-    try {
-      await updateDoc(doc(db, COLLECTIONS.PRODUCTS, editItem.id), { name: editItem.name, description: editItem.description, brand: editItem.brand, updatedAt: serverTimestamp() });
-      setEditItem(null); toast.success('Updated!');
-    } catch { toast.error('Failed'); } finally { setSaving(false); }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this product?')) return;
-    try { await deleteDoc(doc(db, COLLECTIONS.PRODUCTS, id)); toast.success('Deleted'); }
-    catch { toast.error('Failed'); }
-  };
+  // For static tab system
+  const [activeCategory, setActiveCategory] = useState<string>(staticProducts[0]?.id || '');
+  const activeStaticProduct = staticProducts.find((p) => p.id === activeCategory);
 
   return (
     <MainLayout>
-      <PageHero title="Our Products" subtitle="Premium quality solar panels, inverters, batteries from leading brands." breadcrumbs={[{ label: 'Products' }]} />
-      <EditableSection id="products" label="Products" onAddItem={() => { setDraft(EMPTY_PRODUCT); setAddOpen(true); }}>
+      <PageHero
+        title={t.pages.productsTitle}
+        subtitle={t.pages.productsSubtitle}
+        breadcrumbs={[{ label: t.nav.products }]}
+      />
+
+      {/* ══════════════════════════════════════════
+          MODE 1: Firestore products (admin-managed)
+          Rendered as category-grouped cards
+          ══════════════════════════════════════════ */}
+      {hasFirestoreProducts && fsProducts.length > 0 ? (
         <Section background="primary" padding="lg">
-          <SectionHeading badge="Products" title="Our Product Range" subtitle="Certified solar products from trusted manufacturers." />
-          {/* Category tabs */}
-          <div className="flex flex-wrap gap-2 mb-10 justify-center">
-            {categories.map(cat => {
-              const CatIcon = categoryIcons[cat] || Sun;
+          <SectionHeading badge={t.nav.products} title={t.pages.productsTitle} subtitle={t.pages.productsSubtitle} />
+
+          {fsCategories.map(cat => (
+            <div key={cat} className="mb-12 last:mb-0">
+              <h3 className="text-lg font-bold text-content-primary mb-4 flex items-center gap-2">
+                {(() => { const Icon = categoryIcons[cat.toLowerCase().replace(/\s/g, '-')] || Package; return <Icon className="w-5 h-5 text-brand-primary" />; })()}
+                {cat}
+              </h3>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {fsCategoryMap.get(cat)!.map(product => (
+                  <Card key={product.id} className="h-full group" padding="md">
+                    {product.images?.[0] ? (
+                      <div className="aspect-video rounded-xl overflow-hidden mb-4 bg-surface-secondary">
+                        <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      </div>
+                    ) : (
+                      <div className="aspect-video rounded-xl mb-4 bg-gradient-to-br from-brand-primary/5 to-brand-secondary/5 flex items-center justify-center">
+                        <Package className="w-10 h-10 text-brand-primary/20" />
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <h4 className="font-bold text-content-primary group-hover:text-brand-primary transition-colors">{product.name}</h4>
+                      {product.brand && <Badge variant="secondary">{product.brand}</Badge>}
+                      <p className="text-sm text-content-secondary line-clamp-2">{product.description}</p>
+                      {product.specifications && Object.keys(product.specifications).length > 0 && (
+                        <div className="pt-3 space-y-1.5 text-xs text-content-secondary border-t border-line mt-3">
+                          {Object.entries(product.specifications).map(([key, value]) => (
+                            <div key={key} className="flex justify-between">
+                              <span className="capitalize">{key}</span>
+                              <span className="font-medium text-content-primary">{value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="pt-3">
+                        <a href={`https://wa.me/${SITE_CONFIG.whatsapp}?text=Hi! I want to inquire about ${product.name}.`}
+                          target="_blank" rel="noopener noreferrer">
+                          <Button size="sm" fullWidth variant="outline" icon={<MessageCircle className="h-4 w-4" />}>
+                            Inquire Now
+                          </Button>
+                        </a>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          ))}
+        </Section>
+      ) : (
+        /* ══════════════════════════════════════════
+           MODE 2: Static products (fallback)
+           Tab-based category view from constants
+           ══════════════════════════════════════════ */
+        <Section background="primary" padding="lg">
+          <SectionHeading badge={t.nav.products} title={t.pages.productsTitle} subtitle={t.pages.productsSubtitle} />
+
+          {/* Category pills */}
+          <div className="flex flex-wrap justify-center gap-3 mb-12">
+            {staticProducts.map((product) => {
+              const CatIcon = categoryIcons[product.id] || Sun;
+              const isActive = activeCategory === product.id;
               return (
-                <button key={cat} onClick={() => setActiveCategory(cat)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer ${activeCategory === cat ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25' : 'bg-surface-card border border-line text-content-secondary hover:border-brand-primary/30'}`}>
-                  <CatIcon className="h-4 w-4" />{cat}
+                <button key={product.id} onClick={() => setActiveCategory(product.id)}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 cursor-pointer ${
+                    isActive ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30' : 'bg-surface-secondary border border-line text-content-secondary hover:border-brand-primary/30 hover:text-brand-primary'
+                  }`}>
+                  <CatIcon className="h-4 w-4" />{product.category}
                 </button>
               );
             })}
           </div>
 
-          {activeProduct && (
-            <motion.div ref={ref} variants={staggerContainer} initial="hidden" animate={inView ? 'visible' : 'hidden'}
-              className="grid md:grid-cols-2 gap-8 lg:gap-12 items-start">
-              <motion.div variants={fadeUp} className="relative">
-                {isEditMode && (
-                  <div className="absolute top-2 right-2 z-10 flex gap-1">
-                    <button onClick={() => setEditItem({ ...activeProduct })} className="p-1.5 bg-blue-600 text-white rounded cursor-pointer"><Edit2 className="h-3 w-3" /></button>
-                    <button onClick={() => handleDelete(activeProduct.id)} className="p-1.5 bg-red-600 text-white rounded cursor-pointer"><Trash2 className="h-3 w-3" /></button>
-                  </div>
-                )}
-                <div className="aspect-square rounded-3xl bg-gradient-to-br from-brand-primary/10 to-brand-primary/5 border border-brand-primary/20 flex items-center justify-center overflow-hidden">
-                  {activeProduct.images?.[0] ? (
-                    <img src={activeProduct.images[0]} alt={activeProduct.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <Icon className="h-24 w-24 text-brand-primary/30" />
-                  )}
-                </div>
-              </motion.div>
-
-              <motion.div variants={fadeUp} className="space-y-6">
-                {activeProduct.brand && <Badge variant="primary">{activeProduct.brand}</Badge>}
-                <h2 className="text-2xl font-bold text-content-primary">{activeProduct.name}</h2>
-                <p className="text-content-secondary leading-relaxed">{activeProduct.description}</p>
-                {activeProduct.specifications && Object.keys(activeProduct.specifications).length > 0 && (
-                  <div className="rounded-2xl bg-surface-card border border-line overflow-hidden">
-                    <div className="px-5 py-3 bg-brand-primary/5 border-b border-line"><h4 className="text-sm font-bold text-content-primary">Specifications</h4></div>
-                    <div className="divide-y divide-line">
-                      {Object.entries(activeProduct.specifications).map(([k, v]) => (
-                        <div key={k} className="flex justify-between px-5 py-3 text-sm">
-                          <span className="text-content-secondary">{k}</span>
-                          <span className="text-content-primary font-medium">{v}</span>
-                        </div>
-                      ))}
+          <AnimatePresence mode="wait">
+            {activeStaticProduct && (
+              <motion.div key={activeCategory} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8 p-6 rounded-2xl bg-surface-secondary border border-line">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-xl bg-brand-primary/10 flex items-center justify-center">
+                      {(() => { const I = categoryIcons[activeCategory] || Sun; return <I className="h-7 w-7 text-brand-primary" />; })()}
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-content-primary">{activeStaticProduct.category}</h3>
+                      <p className="text-sm text-content-secondary">{activeStaticProduct.description}</p>
                     </div>
                   </div>
-                )}
-                <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noopener noreferrer">
-                    <Button size="lg" icon={<MessageCircle className="h-4 w-4" />}>Enquire on WhatsApp</Button>
-                  </a>
-                  <a href={`tel:${phone}`}>
-                    <Button size="lg" variant="outline" icon={<Phone className="h-4 w-4" />}>Call for Price</Button>
+                  <a href={`https://wa.me/${SITE_CONFIG.whatsapp}?text=Hi! I'm interested in ${activeStaticProduct.category}.`} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" icon={<MessageCircle className="h-4 w-4" />}>WhatsApp</Button>
                   </a>
                 </div>
+
+                <motion.div ref={ref} variants={staggerContainer} initial="hidden" animate={inView ? 'visible' : 'hidden'} className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {activeStaticProduct.items.map((item, idx) => (
+                    <motion.div key={idx} variants={fadeUp}>
+                      <Card className="h-full group" padding="md">
+                        <div className="aspect-square rounded-xl bg-gradient-to-br from-brand-secondary/10 to-brand-primary/5 flex items-center justify-center mb-4 group-hover:from-brand-primary/10 group-hover:to-brand-primary/20 transition-all">
+                          {(() => { const I = categoryIcons[activeCategory] || Sun; return <I className="h-16 w-16 text-brand-primary/30 group-hover:text-brand-primary/50 transition-colors" />; })()}
+                        </div>
+                        <div className="space-y-2">
+                          <h4 className="font-bold text-content-primary group-hover:text-brand-primary transition-colors">{item.name}</h4>
+                          {'brand' in item && <Badge variant="secondary">{item.brand}</Badge>}
+                          {'type' in item && <Badge variant="outline">{item.type}</Badge>}
+                          <div className="pt-3 space-y-1.5 text-xs text-content-secondary">
+                            {Object.entries(item).filter(([key]) => !['name', 'brand', 'type'].includes(key)).map(([key, value]) => (
+                              <div key={key} className="flex justify-between">
+                                <span className="capitalize">{key.replace(/([A-Z])/g, ' $1')}</span>
+                                <span className="font-medium text-content-primary">{value as string}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="pt-4">
+                            <a href={`https://wa.me/${SITE_CONFIG.whatsapp}?text=Hi! I want to inquire about ${item.name}.`} target="_blank" rel="noopener noreferrer">
+                              <Button size="sm" fullWidth variant="outline" icon={<Info className="h-4 w-4" />}>Inquire Now</Button>
+                            </a>
+                          </div>
+                        </div>
+                      </Card>
+                    </motion.div>
+                  ))}
+                </motion.div>
               </motion.div>
-            </motion.div>
-          )}
+            )}
+          </AnimatePresence>
         </Section>
-      </EditableSection>
-
-      <EditModal isOpen={addOpen} onClose={() => setAddOpen(false)} title="Add Product" onSave={handleAdd} saving={saving}>
-        <Field label="Name"><FieldInput value={draft.name} onChange={v => setDraft(d => ({ ...d, name: v }))} placeholder="Product name" /></Field>
-        <Field label="Category"><FieldInput value={draft.category} onChange={v => setDraft(d => ({ ...d, category: v }))} placeholder="solar-panels" /></Field>
-        <Field label="Brand"><FieldInput value={draft.brand || ''} onChange={v => setDraft(d => ({ ...d, brand: v }))} placeholder="Tata Solar" /></Field>
-        <Field label="Description"><FieldTextarea value={draft.description} onChange={v => setDraft(d => ({ ...d, description: v }))} rows={3} /></Field>
-        <Field label="Product Image"><FieldImageUpload onUpload={url => setDraft(d => ({ ...d, images: [url] }))} folder="products" /></Field>
-      </EditModal>
-
-      {editItem && (
-        <EditModal isOpen={!!editItem} onClose={() => setEditItem(null)} title="Edit Product" onSave={handleEditSave} saving={saving}>
-          <Field label="Name"><FieldInput value={editItem.name} onChange={v => setEditItem(e => e && { ...e, name: v })} /></Field>
-          <Field label="Brand"><FieldInput value={editItem.brand || ''} onChange={v => setEditItem(e => e && { ...e, brand: v })} /></Field>
-          <Field label="Description"><FieldTextarea value={editItem.description} onChange={v => setEditItem(e => e && { ...e, description: v })} rows={3} /></Field>
-        </EditModal>
       )}
+
+      {/* Quality Section */}
+      <Section background="secondary" padding="lg">
+        <SectionHeading badge="Quality Assurance" title="Why Choose Our Products?" subtitle="We only stock products that meet our stringent quality standards." />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { title: 'Tier-1 Brands', desc: 'Products from globally recognized manufacturers' },
+            { title: 'Warranty Backed', desc: 'Full manufacturer warranty on all products' },
+            { title: 'Technical Support', desc: 'Expert guidance on product selection' },
+            { title: 'Best Pricing', desc: 'Competitive prices with no hidden costs' },
+          ].map((item, idx) => (
+            <motion.div key={idx} variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }}>
+              <Card className="text-center h-full" padding="lg">
+                <div className="w-12 h-12 mx-auto rounded-xl bg-brand-primary/10 flex items-center justify-center mb-4">
+                  <span className="text-xl font-bold text-brand-primary">{idx + 1}</span>
+                </div>
+                <h4 className="font-bold text-content-primary mb-2">{item.title}</h4>
+                <p className="text-sm text-content-secondary">{item.desc}</p>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+      </Section>
+
+      {/* CTA */}
+      <Section background="gradient" padding="lg">
+        <div className="text-center">
+          <h2 className="text-3xl sm:text-4xl font-bold font-heading text-white mb-4">Need Help Choosing?</h2>
+          <p className="text-white/70 mb-8 max-w-xl mx-auto">Our experts can help you select the perfect products for your requirements.</p>
+          <div className="flex flex-wrap justify-center gap-4">
+            <Link to="/contact">
+              <Button size="lg" icon={<ArrowRight className="h-5 w-5" />} iconPosition="right">{t.common.getQuote}</Button>
+            </Link>
+            <a href={`tel:${SITE_CONFIG.phone}`}>
+              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-brand-secondary" icon={<Phone className="h-5 w-5" />}>
+                {t.common.callNow}
+              </Button>
+            </a>
+          </div>
+        </div>
+      </Section>
     </MainLayout>
   );
 }

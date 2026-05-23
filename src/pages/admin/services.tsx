@@ -92,7 +92,7 @@ export default function AdminServicesPage() {
           <h2 className="text-lg font-bold text-content-primary">Services</h2>
           <p className="text-sm text-content-secondary">Manage your services</p>
         </div>
-        <Button onClick={() => navigate('/admin/panel/services/new')} icon={<Plus className="w-4 h-4" />}>
+        <Button onClick={() => navigate('/admin/services/new')} icon={<Plus className="w-4 h-4" />}>
           Add Service
         </Button>
       </div>

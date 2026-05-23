@@ -112,7 +112,7 @@ export default function AdminTestimonialsPage() {
           <h2 className="text-lg font-bold text-content-primary">Testimonials</h2>
           <p className="text-sm text-content-secondary">Manage customer reviews</p>
         </div>
-        <Button onClick={() => navigate('/admin/panel/testimonials/new')} icon={<Plus className="w-4 h-4" />}>
+        <Button onClick={() => navigate('/admin/testimonials/new')} icon={<Plus className="w-4 h-4" />}>
           Add Testimonial
         </Button>
       </div>

@@ -353,6 +353,3 @@ export const TEAM_MEMBERS = [
   { name: 'Vikash Yadav', role: 'Installation Lead', experience: '500+ installations' },
   { name: 'Priya Singh', role: 'Customer Relations', experience: 'Subsidy & Documentation Expert' },
 ];
-
-// Re-export static strings for convenience
-export { STRINGS } from '@/lib/strings';
