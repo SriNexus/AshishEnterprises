@@ -122,12 +122,12 @@ export default function AdminBlogEditPage() {
         setTags(post.tags || []);
       } else {
         toast.error('Post not found');
-        navigate('/admin/blog');
+        navigate('/admin/panel/blog');
       }
     } catch (error) {
       console.error('Failed to fetch post:', error);
       toast.error('Failed to load post');
-      navigate('/admin/blog');
+      navigate('/admin/panel/blog');
     } finally {
       setLoading(false);
     }
@@ -149,7 +149,7 @@ export default function AdminBlogEditPage() {
         await updateDocument(COLLECTIONS.BLOG_POSTS, id!, postData);
         toast.success('Post updated');
       }
-      navigate('/admin/blog');
+      navigate('/admin/panel/blog');
     } catch (error) {
       console.error('Failed to save post:', error);
       toast.error('Failed to save post');
@@ -164,7 +164,7 @@ export default function AdminBlogEditPage() {
     try {
       await deleteDocument(COLLECTIONS.BLOG_POSTS, id);
       toast.success('Post deleted');
-      navigate('/admin/blog');
+      navigate('/admin/panel/blog');
     } catch (error) {
       console.error('Failed to delete post:', error);
       toast.error('Failed to delete post');
@@ -200,7 +200,7 @@ export default function AdminBlogEditPage() {
           <div className="flex items-center gap-4">
             <button
               type="button"
-              onClick={() => navigate('/admin/blog')}
+              onClick={() => navigate('/admin/panel/blog')}
               className="p-2 rounded-lg hover:bg-surface-secondary transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-5 h-5" />

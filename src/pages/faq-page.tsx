@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FAQS, SITE_CONFIG } from '@/data/constants';
+import { useSite } from '@/store/site-context';
 import { fadeUp, staggerContainer } from '@/animations/variants';
 import { useScrollReveal } from '@/hooks/use-intersection';
 import { cn } from '@/utils/cn';
@@ -23,6 +24,8 @@ const categories = [
 ];
 
 export default function FAQPage() {
+  const { config } = useSite();
+  const whatsapp = config.whatsapp || SITE_CONFIG.whatsapp;
   const [openId, setOpenId] = useState<string | null>(FAQS[0].id);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
@@ -184,7 +187,7 @@ export default function FAQPage() {
               Get instant answers via WhatsApp chat.
             </p>
             <a
-              href={`https://wa.me/${SITE_CONFIG.whatsapp}?text=Hi! I have a question.`}
+              href={`https://wa.me/${whatsapp}?text=Hi! I have a question.`}
               target="_blank"
               rel="noopener noreferrer"
             >

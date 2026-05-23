@@ -232,6 +232,7 @@ const serviceDetails: Record<string, { benefits: string[]; process: string[]; sp
 };
 
 export default function ServiceDetailPage() {
+  const phone = SITE_CONFIG.phone;
   const { slug } = useParams<{ slug: string }>();
   const service = SERVICES.find((s) => s.id === slug);
   const details = slug ? serviceDetails[slug] : null;
@@ -319,7 +320,7 @@ export default function ServiceDetailPage() {
                   Get Quote
                 </Button>
               </Link>
-              <a href={`tel:${SITE_CONFIG.phone}`}>
+              <a href={`tel:${phone}`}>
                 <Button size="lg" variant="outline" icon={<Phone className="h-5 w-5" />}>
                   Call Now
                 </Button>

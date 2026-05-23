@@ -106,7 +106,7 @@ export default function AdminProjectsPage() {
           <h2 className="text-lg font-bold text-content-primary">Projects</h2>
           <p className="text-sm text-content-secondary">Manage your portfolio</p>
         </div>
-        <Button onClick={() => navigate('/admin/projects/new')} icon={<Plus className="w-4 h-4" />}>
+        <Button onClick={() => navigate('/admin/panel/projects/new')} icon={<Plus className="w-4 h-4" />}>
           Add Project
         </Button>
       </div>
